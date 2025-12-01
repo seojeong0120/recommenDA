@@ -20,6 +20,7 @@ class WeatherInfo(TypedDict):
     is_daytime: bool
 
 class Recommendation(TypedDict):
+    fac_id: str
     facility_name: str
     program_name: str
     sport_category: str

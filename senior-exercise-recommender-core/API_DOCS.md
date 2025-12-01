@@ -255,8 +255,31 @@ uvicorn service.api:app --host 0.0.0.0 --port 8000 --reload
 `.env` 파일에 다음 변수를 설정하세요:
 
 ```
-OPENWEATHER_API_KEY=your_api_key_here
+# OpenWeatherMap API 키 (기존 운동 추천용)
+OPENWEATHER_API_KEY=your_openweather_api_key_here
+
+# 기상청 API 키 (알림 기능용)
+KMA_SERVICE_KEY=your_kma_service_key_here
 ```
+
+### API 키 발급 방법
+
+#### 1. OpenWeatherMap API 키
+- 사이트: https://openweathermap.org/api
+- 회원가입 후 API keys 메뉴에서 생성
+- 무료 플랜: 분당 60회, 일일 1,000,000회
+- **용도**: `/api/recommend` 엔드포인트에서 사용
+
+#### 2. 기상청 API 키 (공공데이터포털)
+- 사이트: https://www.data.go.kr/
+- 회원가입 후 "기상청_단기예보 ((구)_동네예보) 조회서비스" 신청
+- 또는 "기상청_초단기실황조회" 신청
+- 무료 제공
+- **용도**: `/api/notification/exercise` 엔드포인트에서 사용
+
+### 참고
+- OpenWeatherMap API 키가 없으면 기본값 사용 (서비스는 정상 작동)
+- 기상청 API 키가 없으면 알림 기능이 작동하지 않음
 
 ---
 

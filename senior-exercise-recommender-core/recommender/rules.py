@@ -33,11 +33,16 @@ def filter_by_weather(candidates: pd.DataFrame, weather: WeatherInfo) -> pd.Data
     rain_prob = weather["rain_prob"]
     pm10 = weather["pm10"]
 
-    # 예: 비 올 확률이 크면 실외(high intensity) 프로그램 제거
+    # 비 올 확률이 크면 실외(high intensity) 프로그램 제거
     if rain_prob > 0.6:
         df = df[~((df["is_indoor"] == False) & (df["intensity_level"] == "high"))]
 
-    # 예: 미세먼지가 매우 높으면 실외 유산소 계열 제거 (여기선 sport_category로 추후 확장)
-    # TODO: sport_category 기준으로 더 섬세하게 조정
+    # 미세먼지가 매우 높으면 실외 운동 제거 (PM10 > 150: 나쁨)
+    if pm10 > 150:
+        # 실외 운동 모두 제거
+        df = df[df["is_indoor"] == True]
+    elif pm10 > 80:
+        # 미세먼지가 높으면 실외 고강도 운동 제거
+        df = df[~((df["is_indoor"] == False) & (df["intensity_level"] == "high"))]
 
     return df

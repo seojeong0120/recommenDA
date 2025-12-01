@@ -92,6 +92,7 @@ def recommend(
     recommendations: List[Recommendation] = []
     for _, row in df.iterrows():
         rec: Recommendation = {
+            "fac_id": str(row["fac_id"]),
             "facility_name": str(row["fac_name"]),
             "program_name": str(row["program_name"]),
             "sport_category": str(row["sport_category"]),
