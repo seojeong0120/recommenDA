@@ -3,7 +3,6 @@
 FastAPI 기반 REST API 서버
 Flutter 앱에서 사용할 수 있는 API 엔드포인트 제공
 """
-import os
 import sys
 from datetime import date
 from typing import List, Optional
@@ -218,40 +217,83 @@ async def get_recommendations(request: RecommendRequest):
 
 @app.post("/api/user", response_model=UserResponse)
 async def create_user(request: UserCreateRequest):
-    """사용자 생성"""
+    """
+    사용자 생성 (Flutter 앱 호환용)
+    
+    주의: Flutter 앱이 보내지 않는 필드들은 임시 기본값을 사용합니다.
+    나중에 Flutter 앱을 수정하여 모든 필드를 전송하도록 권장합니다.
+    """
     try:
-        from db.user_repository import create_user, get_user
+        from db.user_repository import UserRepository
         
-        user_id = create_user(
-            nickname=request.nickname,
-            age_group=request.age_group,
-            health_issues=request.health_issues,
-            goals=request.goals,
-            preference_env=request.preference_env,
-            home_lat=request.home_lat,
-            home_lon=request.home_lon,
+        repo = UserRepository()
+        
+        # Flutter 앱 데이터를 새 PostgreSQL 스키마로 변환
+        # preference_env 변환: "indoor" -> "실내", "outdoor" -> "실외", "any" -> "둘 다"
+        preference_map = {
+            "indoor": "실내",
+            "outdoor": "실외",
+            "any": "둘 다"
+        }
+        preferred_location = preference_map.get(request.preference_env, "둘 다")
+        
+        # 임시 기본값 (Flutter 앱에서 전송하지 않는 필드)
+        # ⚠️ 보안: password는 임시 기본값 사용 (나중에 Flutter 앱에서 받아야 함)
+        default_password = "temp_password_123"  # 임시 비밀번호
+        
+        # age_group에서 birth_date 추정 불가능하므로 임시값 사용
+        # Flutter 앱에서 birth_date를 직접 전송하도록 수정 필요
+        default_birth_date = "500101"  # 임시 생년월일
+        
+        # 회원가입
+        user = repo.create_user(
+            password=default_password,  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            name=request.nickname,
+            birth_date=default_birth_date,  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            gender="미지정",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            health_conditions=request.health_issues,
+            exercise_goals=request.goals,
+            preferred_location=preferred_location,
+            phone="010-0000-0000",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            guardian_phone="010-0000-0000",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            address_road="주소 미입력",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            latitude=request.home_lat or 37.5665,
+            longitude=request.home_lon or 126.9780,
         )
         
-        user = get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        # 비밀번호 해시 제거 후 반환
+        user.pop('password_hash', None)
         
-        return UserResponse(**user)
+        # UserResponse 형식으로 변환 (기존 호환성 유지)
+        return UserResponse(
+            id=user['id'],
+            nickname=user['name'],
+            age_group=request.age_group,  # 원본 유지
+            health_issues=user['health_conditions'],
+            goals=user['exercise_goals'],
+            preference_env=request.preference_env,  # 원본 유지
+            home_lat=float(user['latitude']),
+            home_lon=float(user['longitude']),
+        )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"사용자 생성 중 오류 발생: {str(e)}")
 
 @app.get("/api/user/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int):
-    """사용자 정보 조회"""
+    """사용자 정보 조회 (ID로)"""
     try:
-        from db.user_repository import get_user
+        from db.user_repository import UserRepository
         
-        user = get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        repo = UserRepository()
         
-        return UserResponse(**user)
+        # ID로 조회 (user_repository에 get_user_by_id 메서드 추가 필요)
+        # 임시로 phone으로 조회하거나 다른 방법 사용
+        # 현재는 에러 반환
+        raise HTTPException(
+            status_code=501,
+            detail="ID로 조회 기능은 아직 구현되지 않았습니다. 전화번호로 조회하는 기능을 사용해주세요."
+        )
         
     except HTTPException:
         raise
@@ -364,7 +406,6 @@ async def get_exercise_notification(request: NotificationRequest):
     """
     try:
         from recommender.exercise_recommender import load_exercises, choose_exercise_for_today
-        import datetime as dt
         
         # 날씨 조회 및 위험 평가
         try:
