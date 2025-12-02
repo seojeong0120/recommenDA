@@ -1,26 +1,24 @@
 # recommender/pipeline.py
 from typing import List
 import os
+import json
 import pandas as pd
+from pathlib import Path
 
 from .types import UserProfile, Location, WeatherInfo, Recommendation
 from .utils import haversine_distance_km
 from .rules import filter_by_health, filter_by_weather
 from .scoring import final_score
 
-DATA_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "data",
-    "processed",
-    "facility_program_master.parquet",
-)
+BASE_DIR = Path(__file__).resolve().parents[1]
+JSON_PATH = BASE_DIR / "data" / "processed" / "facility_program_master.json"
 
 def load_facility_master() -> pd.DataFrame:
     """
-    A가 만든 facility_program_master.parquet을 로드.
+    facility_program_master.json 파일을 직접 로드하여 DataFrame으로 변환.
     없으면 에러 대신 빈 DataFrame 반환(초기 개발용).
     """
-    if not os.path.exists(DATA_PATH):
+    if not JSON_PATH.exists():
         # 초기 개발 단계에서 데이터가 아직 없을 수 있음
         return pd.DataFrame(columns=[
             "fac_id", "fac_name", "address",
@@ -32,7 +30,96 @@ def load_facility_master() -> pd.DataFrame:
             "senior_friendly",
             "operating_hours",
         ])
-    return pd.read_parquet(DATA_PATH)
+    
+    # JSON 파일 로드
+    with open(JSON_PATH, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    if not data:
+        return pd.DataFrame(columns=[
+            "fac_id", "fac_name", "address",
+            "lat", "lon",
+            "is_indoor",
+            "sport_category",
+            "program_name",
+            "intensity_level",
+            "senior_friendly",
+            "operating_hours",
+        ])
+    
+    # JSON 데이터를 DataFrame으로 변환
+    rows = []
+    for idx, item in enumerate(data):
+        # 필수 필드 추출
+        fac_name = str(item.get('시설명', '')).strip() if pd.notna(item.get('시설명')) else ''
+        address = str(item.get('주소', '')).strip() if pd.notna(item.get('주소')) else ''
+        lat = item.get('시설위도')
+        lon = item.get('시설경도')
+        is_indoor_str = str(item.get('실내여부', '')).strip() if pd.notna(item.get('실내여부')) else ''
+        sport_category = str(item.get('시설유형명', '')).strip() if pd.notna(item.get('시설유형명')) else ''
+        
+        # 좌표가 유효한지 확인
+        if pd.isna(lat) or pd.isna(lon) or not fac_name:
+            continue
+        
+        # 실내여부 변환
+        is_indoor = is_indoor_str == '실내' if is_indoor_str else True
+        
+        # 프로그램 정보 처리
+        programs = item.get('programs')
+        
+        # programs가 배열이거나 NaN인지 확인
+        is_programs_empty = (
+            pd.isna(programs) if not isinstance(programs, (list, dict)) else False
+        ) or programs is None or programs == '' or (isinstance(programs, list) and len(programs) == 0)
+        
+        if is_programs_empty:
+            # 프로그램 정보가 없으면 빈 문자열로 설정 (기본값 생성하지 않음)
+            program_name = ''
+            intensity_level = 'medium'  # 기본값
+            senior_friendly = True  # 기본값
+            operating_hours = '평일 오전'
+        else:
+            # programs가 있으면 처리 (나중에 확장 가능)
+            # 일단 기본값으로 처리
+            program_name = f'{sport_category} 프로그램' if sport_category else '일반 운동 프로그램'
+            intensity_level = 'medium'
+            senior_friendly = True
+            operating_hours = '평일 오전'
+        
+        rows.append({
+            'fac_id': f'F{len(rows):06d}',
+            'fac_name': fac_name,
+            'address': address,
+            'lat': float(lat),
+            'lon': float(lon),
+            'is_indoor': is_indoor,
+            'sport_category': sport_category if sport_category else 'general',
+            'program_name': program_name,
+            'intensity_level': intensity_level,
+            'senior_friendly': senior_friendly,
+            'operating_hours': operating_hours,
+        })
+    
+    if not rows:
+        return pd.DataFrame(columns=[
+            "fac_id", "fac_name", "address",
+            "lat", "lon",
+            "is_indoor",
+            "sport_category",
+            "program_name",
+            "intensity_level",
+            "senior_friendly",
+            "operating_hours",
+        ])
+    
+    # DataFrame 생성
+    df = pd.DataFrame(rows)
+    
+    # 중복 제거 (같은 시설, 같은 프로그램, 같은 위치)
+    df = df.drop_duplicates(subset=['fac_name', 'program_name', 'lat', 'lon'])
+    
+    return df
 
 def add_distance(df: pd.DataFrame, user_location: Location) -> pd.DataFrame:
     df = df.copy()
@@ -128,8 +215,16 @@ def recommend(
 def _build_reason(row, user_profile: UserProfile, weather: WeatherInfo) -> str:
     """
     간단한 추천 설명 생성 (템플릿 기반).
-    나중에 문장 조금씩만 바꿔줘도 충분히 그럴듯해짐.
+    프로그램명이 없으면 시설명만 언급하는 멘트로 생성.
     """
+    program_name = str(row.get("program_name", "")).strip()
+    facility_name = str(row.get("fac_name", "")).strip()
+    
+    # 프로그램명이 없으면 시설명만 언급
+    if not program_name:
+        return f"오늘은 {facility_name}에서 운동 어떠세요?"
+    
+    # 프로그램명이 있으면 기존 로직 사용
     pieces = []
 
     # 건강 관련
