@@ -198,15 +198,25 @@ def recommend(
     # 6) Recommendation 형태로 변환
     recommendations: List[Recommendation] = []
     for _, row in df_filtered.iterrows():
+        program_name = str(row["program_name"]).strip()
+        facility_name = str(row["fac_name"]).strip()
+        
+        # 프로그램명이 없으면 시설명만 언급하는 reason 생성
+        if not program_name:
+            reason = f"오늘은 {facility_name}에서 운동 어떠세요?"
+        else:
+            # 프로그램명이 있으면 기존 로직 사용
+            reason = _build_reason(row, user_profile, weather_info)
+        
         rec: Recommendation = {
             "fac_id": str(row["fac_id"]),
-            "facility_name": str(row["fac_name"]),
-            "program_name": str(row["program_name"]),
+            "facility_name": facility_name,
+            "program_name": program_name,
             "sport_category": str(row["sport_category"]),
             "distance_km": float(row["dist_km"]),
             "intensity_level": str(row["intensity_level"]),
             "is_indoor": bool(row["is_indoor"]),
-            "reason": _build_reason(row, user_profile, weather_info),
+            "reason": reason,
         }
         recommendations.append(rec)
 
@@ -215,16 +225,8 @@ def recommend(
 def _build_reason(row, user_profile: UserProfile, weather: WeatherInfo) -> str:
     """
     간단한 추천 설명 생성 (템플릿 기반).
-    프로그램명이 없으면 시설명만 언급하는 멘트로 생성.
+    나중에 문장 조금씩만 바꿔줘도 충분히 그럴듯해짐.
     """
-    program_name = str(row.get("program_name", "")).strip()
-    facility_name = str(row.get("fac_name", "")).strip()
-    
-    # 프로그램명이 없으면 시설명만 언급
-    if not program_name:
-        return f"오늘은 {facility_name}에서 운동 어떠세요?"
-    
-    # 프로그램명이 있으면 기존 로직 사용
     pieces = []
 
     # 건강 관련
@@ -244,7 +246,7 @@ def _build_reason(row, user_profile: UserProfile, weather: WeatherInfo) -> str:
         if weather["rain_prob"] > 0.5 or weather["pm10"] > 80:
             pieces.append("현재 날씨/대기질을 고려해 실내 시설을 우선 추천했습니다.")
     else:
-        pieces.append("야외 활동을 선호하시는 점을 반영했습니다.")
+        pieces.append("현재 날씨/대기질을 고려해 야외 시설을 우선 추천했습니다.")
 
     if not pieces:
         pieces.append("연령과 건강 상태, 거리, 날씨를 종합적으로 고려한 추천입니다.")
