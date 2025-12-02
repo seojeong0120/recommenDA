@@ -282,6 +282,8 @@ def recommend(
             "intensity_level": str(row["intensity_level"]),
             "is_indoor": bool(row["is_indoor"]),
             "reason": reason,
+            "lat": float(row["lat"]),
+            "lon": float(row["lon"]),
         }
         recommendations.append(rec)
 

@@ -67,6 +67,8 @@ class RecommendationResponse(BaseModel):
     intensity_level: str
     is_indoor: bool
     reason: str
+    lat: float
+    lon: float
 
 class RecommendResponse(BaseModel):
     recommendations: List[RecommendationResponse]

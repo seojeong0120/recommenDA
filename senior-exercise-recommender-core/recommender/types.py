@@ -28,3 +28,5 @@ class Recommendation(TypedDict):
     intensity_level: str
     is_indoor: bool
     reason: str
+    lat: float
+    lon: float
