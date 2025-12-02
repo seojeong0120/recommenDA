@@ -74,32 +74,100 @@ def load_facility_master() -> pd.DataFrame:
         ) or programs is None or programs == '' or (isinstance(programs, list) and len(programs) == 0)
         
         if is_programs_empty:
-            # 프로그램 정보가 없으면 빈 문자열로 설정 (기본값 생성하지 않음)
-            program_name = ''
-            intensity_level = 'medium'  # 기본값
-            senior_friendly = True  # 기본값
-            operating_hours = '평일 오전'
+            # 프로그램 정보가 없으면 시설만 추천 (프로그램명 없음)
+            rows.append({
+                'fac_id': f'F{len(rows):06d}',
+                'fac_name': fac_name,
+                'address': address,
+                'lat': float(lat),
+                'lon': float(lon),
+                'is_indoor': is_indoor,
+                'sport_category': sport_category if sport_category else 'general',
+                'program_name': '',
+                'intensity_level': 'medium',
+                'senior_friendly': True,
+                'operating_hours': '평일 오전',
+            })
         else:
-            # programs가 있으면 처리 (나중에 확장 가능)
-            # 일단 기본값으로 처리
-            program_name = f'{sport_category} 프로그램' if sport_category else '일반 운동 프로그램'
-            intensity_level = 'medium'
-            senior_friendly = True
-            operating_hours = '평일 오전'
-        
-        rows.append({
-            'fac_id': f'F{len(rows):06d}',
-            'fac_name': fac_name,
-            'address': address,
-            'lat': float(lat),
-            'lon': float(lon),
-            'is_indoor': is_indoor,
-            'sport_category': sport_category if sport_category else 'general',
-            'program_name': program_name,
-            'intensity_level': intensity_level,
-            'senior_friendly': senior_friendly,
-            'operating_hours': operating_hours,
-        })
+            # programs가 배열인 경우, 각 프로그램마다 별도 레코드 생성
+            if isinstance(programs, list):
+                for program in programs:
+                    if isinstance(program, dict):
+                        program_name = str(program.get('program_name', '')).strip()
+                        if program_name:  # 프로그램명이 있는 경우만 추가
+                            # schedules 정보는 나중에 활용 가능
+                            schedules = program.get('schedules', [])
+                            
+                            # 기본값 설정 (프로그램명에서 추론 가능하면 추론)
+                            intensity_level = 'medium'
+                            senior_friendly = True
+                            
+                            # 프로그램명에서 시니어/실버 관련 키워드 확인
+                            program_name_lower = program_name.lower()
+                            if any(keyword in program_name_lower for keyword in ['실버', '시니어', '노인', '효도']):
+                                senior_friendly = True
+                            
+                            # operating_hours는 schedules에서 추론 가능하면 추론
+                            operating_hours = '평일 오전'
+                            if schedules and isinstance(schedules, list) and len(schedules) > 0:
+                                # 첫 번째 스케줄에서 시간 정보 추출 시도
+                                first_schedule = str(schedules[0])
+                                if '오전' in first_schedule or '09' in first_schedule or '10' in first_schedule or '11' in first_schedule:
+                                    operating_hours = '평일 오전'
+                                elif '오후' in first_schedule or '13' in first_schedule or '14' in first_schedule or '15' in first_schedule:
+                                    operating_hours = '평일 오후'
+                                elif '저녁' in first_schedule or '18' in first_schedule or '19' in first_schedule or '20' in first_schedule:
+                                    operating_hours = '평일 저녁'
+                            
+                            rows.append({
+                                'fac_id': f'F{len(rows):06d}',
+                                'fac_name': fac_name,
+                                'address': address,
+                                'lat': float(lat),
+                                'lon': float(lon),
+                                'is_indoor': is_indoor,
+                                'sport_category': sport_category if sport_category else 'general',
+                                'program_name': program_name,
+                                'intensity_level': intensity_level,
+                                'senior_friendly': senior_friendly,
+                                'operating_hours': operating_hours,
+                            })
+            else:
+                # programs가 딕셔너리인 경우 (단일 프로그램)
+                if isinstance(programs, dict):
+                    program_name = str(programs.get('program_name', '')).strip()
+                    if program_name:
+                        schedules = programs.get('schedules', [])
+                        intensity_level = 'medium'
+                        senior_friendly = True
+                        
+                        program_name_lower = program_name.lower()
+                        if any(keyword in program_name_lower for keyword in ['실버', '시니어', '노인', '효도']):
+                            senior_friendly = True
+                        
+                        operating_hours = '평일 오전'
+                        if schedules and isinstance(schedules, list) and len(schedules) > 0:
+                            first_schedule = str(schedules[0])
+                            if '오전' in first_schedule or '09' in first_schedule or '10' in first_schedule or '11' in first_schedule:
+                                operating_hours = '평일 오전'
+                            elif '오후' in first_schedule or '13' in first_schedule or '14' in first_schedule or '15' in first_schedule:
+                                operating_hours = '평일 오후'
+                            elif '저녁' in first_schedule or '18' in first_schedule or '19' in first_schedule or '20' in first_schedule:
+                                operating_hours = '평일 저녁'
+                        
+                        rows.append({
+                            'fac_id': f'F{len(rows):06d}',
+                            'fac_name': fac_name,
+                            'address': address,
+                            'lat': float(lat),
+                            'lon': float(lon),
+                            'is_indoor': is_indoor,
+                            'sport_category': sport_category if sport_category else 'general',
+                            'program_name': program_name,
+                            'intensity_level': intensity_level,
+                            'senior_friendly': senior_friendly,
+                            'operating_hours': operating_hours,
+                        })
     
     if not rows:
         return pd.DataFrame(columns=[
@@ -201,12 +269,12 @@ def recommend(
         program_name = str(row["program_name"]).strip()
         facility_name = str(row["fac_name"]).strip()
         
-        # 프로그램명이 없으면 시설명만 언급하는 reason 생성
+        # 프로그램명이 없으면 추천 결과에서 제외
         if not program_name:
-            reason = f"오늘은 {facility_name}에서 운동 어떠세요?"
-        else:
-            # 프로그램명이 있으면 기존 로직 사용
-            reason = _build_reason(row, user_profile, weather_info)
+            continue
+        
+        # 프로그램명이 있으면 기존 로직 사용
+        reason = _build_reason(row, user_profile, weather_info)
         
         rec: Recommendation = {
             "fac_id": str(row["fac_id"]),
