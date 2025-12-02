@@ -279,26 +279,93 @@ async def create_user(request: UserCreateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"사용자 생성 중 오류 발생: {str(e)}")
 
+@app.get("/api/users", response_model=List[dict])
+async def get_all_users():
+    """모든 사용자 정보 조회 (개발/테스트용)"""
+    try:
+        from db.user_repository import UserRepository
+        from psycopg2.extras import RealDictCursor
+        
+        repo = UserRepository()
+        
+        # 모든 사용자 조회
+        with repo._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        id, name, birth_date, gender,
+                        health_conditions, exercise_goals, preferred_location,
+                        phone, guardian_phone, address_road,
+                        latitude, longitude, created_at
+                    FROM users
+                    ORDER BY created_at DESC
+                """)
+                results = cur.fetchall()
+                users = []
+                for row in results:
+                    user_dict = dict(row)
+                    # created_at을 문자열로 변환
+                    if user_dict.get('created_at'):
+                        user_dict['created_at'] = str(user_dict['created_at'])
+                    users.append(user_dict)
+                return users
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"사용자 조회 중 오류 발생: {str(e)}"
+        )
+
 @app.get("/api/user/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int):
     """사용자 정보 조회 (ID로)"""
     try:
         from db.user_repository import UserRepository
+        from psycopg2.extras import RealDictCursor
         
         repo = UserRepository()
         
-        # ID로 조회 (user_repository에 get_user_by_id 메서드 추가 필요)
-        # 임시로 phone으로 조회하거나 다른 방법 사용
-        # 현재는 에러 반환
-        raise HTTPException(
-            status_code=501,
-            detail="ID로 조회 기능은 아직 구현되지 않았습니다. 전화번호로 조회하는 기능을 사용해주세요."
-        )
+        # ID로 조회
+        with repo._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        id, name, birth_date, gender,
+                        health_conditions, exercise_goals, preferred_location,
+                        phone, guardian_phone, address_road,
+                        latitude, longitude
+                    FROM users
+                    WHERE id = %s
+                """, (user_id,))
+                result = cur.fetchone()
+                
+                if not result:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="사용자를 찾을 수 없습니다."
+                    )
+                
+                user = dict(result)
+                
+                # UserResponse 형식으로 변환
+                return UserResponse(
+                    id=user['id'],
+                    nickname=user['name'],
+                    age_group="60-64",  # 임시 (birth_date에서 계산 필요)
+                    health_issues=user['health_conditions'],
+                    goals=user['exercise_goals'],
+                    preference_env=user['preferred_location'],  # 한글 -> 영어 변환 필요
+                    home_lat=float(user['latitude']),
+                    home_lon=float(user['longitude']),
+                )
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"사용자 조회 중 오류 발생: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"사용자 조회 중 오류 발생: {str(e)}"
+        )
 
 @app.post("/api/community/join", response_model=JoinSessionResponse)
 async def join_community_session(request: JoinSessionRequest):
