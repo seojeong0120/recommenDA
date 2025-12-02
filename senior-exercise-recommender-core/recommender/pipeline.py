@@ -51,46 +51,66 @@ def recommend(
     user_location: Location,
     weather_info: WeatherInfo,
     top_k: int = 5,
+    max_radius_km: float = 20.0,
 ) -> List[Recommendation]:
     """
     전체 추천 파이프라인:
     1) 시설-프로그램 마스터 로드
-    2) 사용자 위치 기준 거리 계산/반경 필터
-    3) 건강/날씨 룰 필터링
-    4) 점수 계산 및 상위 K개 선택
-    5) Recommendation 리스트 반환
+    2) 사용자 위치 기준 거리 계산
+    3) 건강/날씨 룰 필터링 (거리 필터보다 먼저 적용)
+    4) 동적 반경 확장으로 최소 추천 개수 보장
+    5) 점수 계산 및 상위 K개 선택
+    6) Recommendation 형태로 변환
+    
+    Args:
+        max_radius_km: 최대 반경 (기본 20km, 데이터가 적을 때 확장)
     """
     df = load_facility_master()
     if df.empty:
-        # 개발 초기용: 빈 리스트 반환
         return []
 
     # 1) 거리 컬럼 추가
     df = add_distance(df, user_location)
 
-    # 2) 반경 필터링
-    df = filter_by_radius(df, max_km=3.0)
+    # 2) 룰 기반 필터 (건강, 날씨) - 거리 필터보다 먼저 적용
+    # 이렇게 하면 건강/날씨 조건에 맞는 시설 중에서 거리순으로 추천 가능
+    df = filter_by_health(df, user_profile)
+    df = filter_by_weather(df, weather_info)
+    
     if df.empty:
         return []
 
-    # 3) 룰 기반 필터 (건강, 날씨)
-    df = filter_by_health(df, user_profile)
-    df = filter_by_weather(df, weather_info)
-    if df.empty:
+    # 3) 동적 반경 확장: 최소 top_k개 추천 보장
+    # 3km -> 5km -> 10km -> 20km 순으로 확장
+    radius_candidates = [3.0, 5.0, 10.0, max_radius_km]
+    df_filtered = pd.DataFrame()
+    
+    for radius in radius_candidates:
+        df_filtered = filter_by_radius(df, max_km=radius)
+        if len(df_filtered) >= top_k:
+            break
+    
+    # 최소한의 추천을 위해 반경 내 모든 후보 사용 (top_k보다 적어도)
+    if df_filtered.empty:
+        # 반경 확장 후에도 없으면 거리순으로 상위 후보 사용
+        df_filtered = df.nsmallest(min(top_k * 2, len(df)), "dist_km")
+    
+    if df_filtered.empty:
         return []
 
     # 4) 점수 계산
-    df = df.copy()
-    df["score"] = df.apply(
+    df_filtered = df_filtered.copy()
+    df_filtered["score"] = df_filtered.apply(
         lambda row: final_score(row, user_profile, weather_info),
         axis=1,
     )
 
-    df = df.sort_values("score", ascending=False).head(top_k)
+    # 5) 상위 K개 선택
+    df_filtered = df_filtered.sort_values("score", ascending=False).head(top_k)
 
-    # 5) Recommendation 형태로 변환
+    # 6) Recommendation 형태로 변환
     recommendations: List[Recommendation] = []
-    for _, row in df.iterrows():
+    for _, row in df_filtered.iterrows():
         rec: Recommendation = {
             "fac_id": str(row["fac_id"]),
             "facility_name": str(row["fac_name"]),
