@@ -9,7 +9,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         
-        android:usesCleartextTraffic="true" >
+        android:usesCleartextTraffic="true" 
+        android:hardwareAccelerated="false">
+
+        <meta-data
+            android:name="com.naver.maps.map.CLIENT_ID"
+            android:value="9ubrj08r2u" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
