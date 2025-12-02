@@ -42,6 +42,7 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
+  flutter_naver_map: ^1.4.1+1
 
 dev_dependencies:
   flutter_test:
