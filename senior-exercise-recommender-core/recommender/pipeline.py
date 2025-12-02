@@ -269,17 +269,14 @@ def recommend(
         program_name = str(row["program_name"]).strip()
         facility_name = str(row["fac_name"]).strip()
         
-        # 프로그램명이 없으면 추천 결과에서 제외
-        if not program_name:
-            continue
-        
-        # 프로그램명이 있으면 기존 로직 사용
+        # 프로그램명이 없어도 시설만 추천 (program_name은 빈 문자열로 유지)
+        # reason은 기존 로직 사용
         reason = _build_reason(row, user_profile, weather_info)
         
         rec: Recommendation = {
             "fac_id": str(row["fac_id"]),
             "facility_name": facility_name,
-            "program_name": program_name,
+            "program_name": program_name,  # 프로그램이 없으면 빈 문자열
             "sport_category": str(row["sport_category"]),
             "distance_km": float(row["dist_km"]),
             "intensity_level": str(row["intensity_level"]),
