@@ -69,9 +69,19 @@ class RecommendationResponse(BaseModel):
     lat: float
     lon: float
 
+class ExerciseVideoResponse(BaseModel):
+    name: str
+    체력항목: str
+    운동도구: str
+    신체부위: str
+    혼자여부: str
+    url: str
+    info: str  # 포맷된 정보
+
 class RecommendResponse(BaseModel):
     recommendations: List[RecommendationResponse]
     weather_info: dict
+    exercise_videos: Optional[List[ExerciseVideoResponse]] = None  # 날씨 위험 시 추천되는 실내 운동 영상
 
 class UserCreateRequest(BaseModel):
     nickname: str
@@ -115,15 +125,6 @@ class ParticipantResponse(BaseModel):
 
 class SessionParticipantsResponse(BaseModel):
     participants: List[ParticipantResponse]
-
-class ExerciseVideoResponse(BaseModel):
-    name: str
-    체력항목: str
-    운동도구: str
-    신체부위: str
-    혼자여부: str
-    url: str
-    info: str  # 포맷된 정보
 
 class GroupExerciseVideosRequest(BaseModel):
     user_profile: Optional[UserProfileRequest] = None
@@ -204,6 +205,50 @@ async def get_recommendations(request: RecommendRequest):
             RecommendationResponse(**rec) for rec in recommendations
         ]
         
+        # 날씨가 위험하면 실내 운동 영상 추천
+        exercise_videos = None
+        from service.weather_client import fetch_kma_ultra_nowcast, evaluate_weather_danger
+        from recommender.exercise_recommender import load_exercises, choose_exercise_for_today
+        
+        try:
+            weather_raw = fetch_kma_ultra_nowcast(user_location["lat"], user_location["lon"])
+            if weather_raw:
+                # 미세먼지가 높은지 확인 (PM10 > 80)
+                is_air_quality_risky = weather_info["pm10"] > 80
+                is_dangerous, _ = evaluate_weather_danger(
+                    weather_raw,
+                    has_chronic_disease=len(user_profile.get("health_issues", [])) > 0,
+                    air_quality_risky=is_air_quality_risky,
+                )
+                
+                if is_dangerous:
+                    # 날씨가 위험하면 실내 운동 영상 추천
+                    exercises = load_exercises()
+                    if exercises:
+                        # 사용자 ID는 임시로 생성 (실제로는 요청에서 받아야 함)
+                        user_id = f"user_{user_location['lat']}_{user_location['lon']}"
+                        exercise = choose_exercise_for_today(
+                            exercises,
+                            user_id=user_id,
+                            today_date=None,
+                        )
+                        
+                        if exercise:
+                            exercise_videos = [
+                                ExerciseVideoResponse(
+                                    name=exercise.get("Name", ""),
+                                    체력항목=exercise.get("체력항목", ""),
+                                    운동도구=exercise.get("운동도구", ""),
+                                    신체부위=exercise.get("신체부위", ""),
+                                    혼자여부=exercise.get("혼자여부", ""),
+                                    url=exercise.get("url", ""),
+                                    info=f"체력항목: {exercise.get('체력항목', '')} | 도구: {exercise.get('운동도구', '')} | 부위: {exercise.get('신체부위', '')}",
+                                )
+                            ]
+        except Exception as e:
+            # 날씨 평가 실패해도 추천은 계속 진행
+            print(f"날씨 위험 평가 중 오류: {e}")
+        
         return RecommendResponse(
             recommendations=recommendation_responses,
             weather_info={
@@ -211,7 +256,8 @@ async def get_recommendations(request: RecommendRequest):
                 "rain_prob": weather_info["rain_prob"],
                 "pm10": weather_info["pm10"],
                 "is_daytime": weather_info["is_daytime"],
-            }
+            },
+            exercise_videos=exercise_videos,
         )
         
     except Exception as e:
@@ -424,7 +470,7 @@ async def get_group_exercise_videos(request: GroupExerciseVideosRequest):
     커뮤니티 운동이 성사되었을 때 함께 할 수 있는 운동 영상을 추천합니다.
     """
     try:
-        from service.exercise_video_client import (
+        from service.group_exercise_video_client import (
             recommend_group_exercise_videos,
             format_video_info,
         )

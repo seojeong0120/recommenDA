@@ -1,6 +1,6 @@
-# service/exercise_video_client.py
+# service/group_exercise_video_client.py
 """
-그룹 운동 영상 추천 클라이언트
+함께하는 운동을 위한 그룹 운동 영상 추천 클라이언트
 커뮤니티 운동이 성사되었을 때 함께 할 수 있는 운동 영상을 추천합니다.
 """
 from typing import List, Dict, Any, Optional

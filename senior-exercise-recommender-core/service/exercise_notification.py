@@ -109,11 +109,11 @@ if __name__ == "__main__":
         reh = weather.get("REH", "N/A")
         rn1 = weather.get("RN1", "N/A")
         
-        # 최고/최저 기온·풍속 (단기예보)
-        tmax = extremes.get("tmax")
-        tmin = extremes.get("tmin")
-        wmax = extremes.get("wmax")
-        wmin = extremes.get("wmin")
+        # 단기예보는 제거 (필요시 별도 조회)
+        tmax = None
+        tmin = None
+        wmax = None
+        wmin = None
         
         # 강수형태 코드를 텍스트로 변환
         pty_text = {
