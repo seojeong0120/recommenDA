@@ -84,6 +84,8 @@ class RecommendResponse(BaseModel):
     exercise_videos: Optional[List[ExerciseVideoResponse]] = None  # 날씨 위험 시 추천되는 실내 운동 영상
 
 class UserCreateRequest(BaseModel):
+    phone: str  # 로그인 ID (전화번호)
+    password: str  # 비밀번호
     nickname: str
     age_group: str
     health_issues: List[str]
@@ -276,6 +278,14 @@ async def create_user(request: UserCreateRequest):
         
         repo = UserRepository()
         
+        # 전화번호 중복 확인
+        existing_user = repo.get_user_by_phone(request.phone)
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail=f"이미 등록된 전화번호입니다: {request.phone}"
+            )
+        
         # Flutter 앱 데이터를 새 PostgreSQL 스키마로 변환
         # preference_env 변환: "indoor" -> "실내", "outdoor" -> "실외", "any" -> "둘 다"
         preference_map = {
@@ -285,24 +295,20 @@ async def create_user(request: UserCreateRequest):
         }
         preferred_location = preference_map.get(request.preference_env, "둘 다")
         
-        # 임시 기본값 (Flutter 앱에서 전송하지 않는 필드)
-        # ⚠️ 보안: password는 임시 기본값 사용 (나중에 Flutter 앱에서 받아야 함)
-        default_password = "temp_password_123"  # 임시 비밀번호
-        
         # age_group에서 birth_date 추정 불가능하므로 임시값 사용
         # Flutter 앱에서 birth_date를 직접 전송하도록 수정 필요
         default_birth_date = "500101"  # 임시 생년월일
         
         # 회원가입
         user = repo.create_user(
-            password=default_password,  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            password=request.password,  # 사용자가 입력한 비밀번호
             name=request.nickname,
             birth_date=default_birth_date,  # ⚠️ 임시 - Flutter 앱에서 받아야 함
             gender="미지정",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
             health_conditions=request.health_issues,
             exercise_goals=request.goals,
             preferred_location=preferred_location,
-            phone="010-0000-0000",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            phone=request.phone,  # 사용자가 입력한 전화번호 (로그인 ID)
             guardian_phone="010-0000-0000",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
             address_road="주소 미입력",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
             latitude=request.home_lat or 37.5665,
