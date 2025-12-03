@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart'; 
 import 'package:flutter_naver_map/flutter_naver_map.dart'; 
+<<<<<<< HEAD
 import 'login_screen.dart'; // [변경] 로그인 화면
+=======
+import 'login_screen.dart'; // [변경] 로그인 화면 import
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
 import 'notification.dart'; 
 
 void main() async {
@@ -14,6 +18,7 @@ void main() async {
     print("⚠️ .env 로드 실패 (무시): $e");
   }
 
+<<<<<<< HEAD
   // 네이버 지도 초기화
   try {
     await NaverMapSdk.instance.initialize(
@@ -26,6 +31,8 @@ void main() async {
     print("네이버 지도 초기화 중 에러 발생: $e");
   }
 
+=======
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
   _initServices(); 
 
   runApp(const MyApp());
@@ -71,7 +78,11 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+<<<<<<< HEAD
       // [중요] 앱 시작 시 로그인 화면부터 시작
+=======
+      // [변경] 앱 시작 시 로그인 화면 표시
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
       home: const LoginScreen(),
     );
   }

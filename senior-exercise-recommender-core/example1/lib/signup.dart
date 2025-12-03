@@ -11,7 +11,11 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
+<<<<<<< HEAD
   // 컨트롤러
+=======
+  // 컨트롤러 추가 (ID, PW)
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _pwController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -38,18 +42,37 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _checkFormValidity() {
+<<<<<<< HEAD
     bool isIdValid = _idController.text.isNotEmpty;
     bool isPwValid = _pwController.text.length >= 4;
+=======
+    // 유효성 검사 항목 추가 (ID, PW)
+    bool isIdValid = _idController.text.isNotEmpty;
+    bool isPwValid = _pwController.text.length >= 4; // 최소 4자리
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
     bool isNameValid = _nameController.text.isNotEmpty;
     bool isBirthValid = _isValidDate(_birthController.text);
     bool isGenderValid = _selectedGender != null;
     bool isPlaceValid = _selectedPreference != null;
     
+<<<<<<< HEAD
     // 전화번호는 선택 사항 또는 필수 사항 여부에 따라 조정 가능
     // 여기서는 간단히 체크
     bool isPhoneValid = true; 
 
     bool isValid = isIdValid && isPwValid && isNameValid && isBirthValid && isGenderValid && isPlaceValid && isPhoneValid;
+=======
+    // 건강 상태와 목적은 필수 아님 (선택사항)
+    // bool isHealthSelected = _selectedHealthIssues.isNotEmpty; 
+    // bool isGoalSelected = _selectedGoals.isNotEmpty;
+
+    RegExp phoneRegex = RegExp(r'^010-\d{4}-\d{4}$');
+    bool isPhoneValid = phoneRegex.hasMatch(_phoneController.text);
+    bool isGuardianPhoneValid = phoneRegex.hasMatch(_guardianPhoneController.text);
+
+    bool isValid = isIdValid && isPwValid && isNameValid && isBirthValid && isGenderValid && 
+                   isPlaceValid && isPhoneValid && isGuardianPhoneValid;
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
 
     if (isValid != _isButtonActive) {
       setState(() { _isButtonActive = isValid; });
@@ -83,11 +106,19 @@ class _SignUpPageState extends State<SignUpPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+<<<<<<< HEAD
               const Text("회원가입 정보 입력", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
               const SizedBox(height: 30),
 
               // [신규] 아이디 (이 값이 api.py의 phone 필드로 들어갑니다)
               _buildLabel("아이디 (로그인용)"),
+=======
+              const Text("회원가입을 위해\n정보를 입력해주세요.", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+              const SizedBox(height: 30),
+
+              // [신규] 아이디
+              _buildLabel("아이디"),
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
               _buildTextField(controller: _idController, hint: "아이디 입력", inputType: TextInputType.text),
               const SizedBox(height: 24),
 
@@ -156,8 +187,13 @@ class _SignUpPageState extends State<SignUpPage> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => UserLocationScreen(
+<<<<<<< HEAD
                           userId: _idController.text, // 입력받은 아이디 전달
                           password: _pwController.text, // 입력받은 비번 전달
+=======
+                          userId: _idController.text, // ID 전달
+                          password: _pwController.text, // PW 전달
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
                           name: _nameController.text,
                           birthdate: _birthController.text,
                           gender: _selectedGender!,
