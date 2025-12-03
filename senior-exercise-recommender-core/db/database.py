@@ -26,8 +26,18 @@ def init_database():
     if not DB_PATH.exists():
         conn = get_db_connection()
         try:
-            with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-                schema_sql = f.read()
+            # 여러 인코딩 시도 (UTF-8, CP949, EUC-KR)
+            encodings = ['utf-8', 'cp949', 'euc-kr', 'latin-1']
+            schema_sql = None
+            for encoding in encodings:
+                try:
+                    with open(SCHEMA_PATH, "r", encoding=encoding) as f:
+                        schema_sql = f.read()
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if schema_sql is None:
+                raise ValueError(f"schema.sql 파일을 읽을 수 없습니다. 지원되는 인코딩을 시도했지만 실패했습니다.")
             conn.executescript(schema_sql)
             conn.commit()
         finally:
