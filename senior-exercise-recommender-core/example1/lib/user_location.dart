@@ -7,15 +7,24 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'home_screen.dart';
 
 class UserLocationScreen extends StatefulWidget {
+<<<<<<< HEAD
+  final String userId; // 사용자가 입력한 아이디
+  final String password;
+=======
+  final String userId; // [신규]
+  final String password; // [신규]
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
   final String name;
   final String birthdate;
   final String gender;
-  final List<String> healthIssues; // 복수 선택 리스트
-  final List<String> goals;        // 복수 선택 리스트
-  final String preference;         // [추가됨] 선호 장소 (실내, 실외, 둘 다)
+  final List<String> healthIssues;
+  final List<String> goals;
+  final String preference;
 
   const UserLocationScreen({
     super.key,
+    required this.userId,
+    required this.password,
     required this.name,
     required this.birthdate,
     required this.gender,
@@ -53,7 +62,10 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
       }
     }
     try {
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5)
+      );
       _lat = position.latitude;
       _lon = position.longitude;
       await _getAddressFromKakao(position.latitude, position.longitude);
@@ -105,46 +117,72 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
     return "60-64"; 
   }
 
-  // [중요] 한글 장소 선호도를 API용 영어 코드로 변환
   String _mapPreferenceToApi(String pref) {
     if (pref == "실내") return "indoor";
     if (pref == "실외") return "outdoor";
-    return "any"; // "둘 다" 또는 예외 상황
+    return "any";
   }
 
-  // 회원가입 API 호출
+<<<<<<< HEAD
+=======
+// ... (위쪽 import는 그대로) ...
+
+  // 회원가입 API 호출 함수
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
   Future<void> _registerAndGoHome() async {
+    // 에뮬레이터용 주소 (10.0.2.2)
     const String apiUrl = "http://10.0.2.2:8000/api/user"; 
     
     setState(() => _isLoading = true);
 
     try {
-      // 1. 데이터 준비
+<<<<<<< HEAD
+      // [API 맞춤] api.py의 UserCreateRequest 모델에 맞춰 데이터 구성
       final Map<String, dynamic> requestBody = {
+        // api.py에서는 'phone' 필드를 로그인 ID로 사용합니다.
+        "phone": widget.userId,  // 사용자가 입력한 아이디를 phone 필드에 매핑
+=======
+      final Map<String, dynamic> requestBody = {
+        "username": widget.userId,
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
+        "password": widget.password,
         "nickname": widget.name,
         "age_group": _calculateAgeGroup(widget.birthdate),
-        "health_issues": widget.healthIssues, // 리스트 그대로 전송
-        "goals": widget.goals,                // 리스트 그대로 전송
-        "preference_env": _mapPreferenceToApi(widget.preference), // 변환해서 전송
+        "health_issues": widget.healthIssues,
+        "goals": widget.goals,
+        "preference_env": _mapPreferenceToApi(widget.preference),
         "home_lat": _lat ?? 37.5665,
         "home_lon": _lon ?? 126.9780,
       };
 
-      print("보내는 데이터: $requestBody"); // 디버깅용
+      print("보내는 데이터: $requestBody");
 
-      // 2. 서버 전송
       final response = await http.post(
         Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
+<<<<<<< HEAD
+        // 한글 깨짐 방지 헤더 설정
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+        },
+        // jsonEncode로 변환하여 전송
         body: jsonEncode(requestBody),
+=======
+        headers: {
+          // [핵심] 여기서 UTF-8임을 명시하면, body가 String이어도 알아서 잘 처리해줍니다.
+          "Content-Type": "application/json; charset=UTF-8", 
+        },
+        // [변경] utf8.encode()를 제거하고, 그냥 json string을 보냅니다.
+        body: jsonEncode(requestBody), 
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
       );
 
+      // --- 응답 처리 ---
       if (response.statusCode == 200) {
+        // 한글 깨짐 방지를 위해 bodyBytes를 decode 합니다.
         final userData = jsonDecode(utf8.decode(response.bodyBytes));
         
         if (!mounted) return;
         
-        // 성공 팝업
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -173,16 +211,31 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
           ),
         );
       } else {
-        throw Exception("서버 에러: ${response.statusCode} / ${response.body}");
+<<<<<<< HEAD
+        // 에러 메시지 디코딩 시도
+=======
+        // 에러 메시지도 한글 디코딩 시도
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
+        String errorDetail = response.body;
+        try {
+           errorDetail = utf8.decode(response.bodyBytes);
+        } catch (_) {}
+        throw Exception("서버 에러 (${response.statusCode}): $errorDetail");
       }
     } catch (e) {
       print("가입 에러: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
+<<<<<<< HEAD
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류가 발생했습니다. 다시 시도해주세요.")));
+=======
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("오류가 발생했습니다. 다시 시도해주세요.")),
+      );
+>>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
+// ... (나머지 코드는 그대로) ...
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -211,7 +264,7 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
               Expanded(flex: 2, child: ElevatedButton(
                 onPressed: (_isLocationFound && !_isLoading) ? _registerAndGoHome : null,
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
-                child: const Text("등록 끝내기", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                child: const Text("가입 끝내기", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               )),
             ]),
             const SizedBox(height: 20),
