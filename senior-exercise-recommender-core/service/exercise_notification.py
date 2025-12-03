@@ -15,11 +15,11 @@ if _is_main:
 
 # import 처리 (직접 실행 시와 모듈로 import 시 모두 지원)
 try:
-    from .weather import fetch_ultra_nowcast, evaluate_weather_danger
+    from .weather_client import fetch_kma_ultra_nowcast, evaluate_weather_danger
     from ..recommender.exercise_recommender import load_exercises, choose_exercise_for_today
 except ImportError:
     # 직접 실행 시 상대 import가 실패하면 절대 import 사용
-    from service.weather import fetch_ultra_nowcast, evaluate_weather_danger
+    from service.weather_client import fetch_kma_ultra_nowcast, evaluate_weather_danger
     from recommender.exercise_recommender import load_exercises, choose_exercise_for_today
 
 
@@ -32,8 +32,11 @@ def build_notification_message(
     2) 위험한 날씨이면 운동 영상 추천 + 알림 문장 생성
     3) 위험하지 않으면 None 반환 (또는 다른 문장으로 바꿔도 됨)
     """
-    # 1) 날씨 조회
-    weather = fetch_ultra_nowcast()
+    # 1) 날씨 조회 (서울 기본값, 실제로는 위치 정보 필요)
+    lat, lon = 37.5665, 126.9780  # 서울 기본값
+    weather = fetch_kma_ultra_nowcast(lat, lon)
+    if not weather:
+        return None
     is_dangerous, weather_text = evaluate_weather_danger(weather)
 
     if not is_dangerous:
@@ -92,9 +95,12 @@ if __name__ == "__main__":
     
     try:
         # 날씨 정보 조회 및 출력
-        from service.weather import fetch_ultra_nowcast, fetch_today_extremes
-        weather = fetch_ultra_nowcast()
-        extremes = fetch_today_extremes(target_date=test_date)
+        from service.weather_client import fetch_kma_ultra_nowcast
+        lat, lon = 37.5665, 126.9780  # 서울 기본값
+        weather = fetch_kma_ultra_nowcast(lat, lon)
+        if not weather:
+            print("날씨 정보 조회 실패")
+            sys.exit(1)
         
         # 주요 날씨 정보 출력
         temp = weather.get("T1H", "N/A")  # 현재 기온 (초단기실황)

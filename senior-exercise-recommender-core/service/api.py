@@ -370,9 +370,22 @@ async def get_exercise_notification(request: NotificationRequest):
         
         # 날씨 조회 및 위험 평가
         try:
-            from service.weather import fetch_ultra_nowcast, evaluate_weather_danger
+            from service.weather_client import evaluate_weather_danger, fetch_kma_ultra_nowcast
             
-            weather = fetch_ultra_nowcast()
+            # 위치 정보 사용 (요청에 있으면 사용, 없으면 서울 기본값)
+            lat = request.lat if request.lat is not None else 37.5665
+            lon = request.lon if request.lon is not None else 126.9780
+            
+            weather = fetch_kma_ultra_nowcast(lat, lon)
+            if not weather:
+                # 날씨 조회 실패 시 알림 없음
+                return NotificationResponse(
+                    has_notification=False,
+                    message=None,
+                    exercise=None,
+                    weather_info=None,
+                )
+            
             is_dangerous, weather_text = evaluate_weather_danger(
                 weather,
                 has_chronic_disease=request.has_chronic_disease,

@@ -27,22 +27,33 @@ def filter_by_weather(candidates: pd.DataFrame, weather: WeatherInfo) -> pd.Data
     """
     날씨/미세먼지/시간대 등을 기준으로
     실외 고위험 운동 제거 or 패널티를 줄 때 사용.
-    여기서는 '완전 제거' 위주의 간단 필터만 처리.
+    노인 기준으로 보수적으로 필터링.
     """
     df = candidates.copy()
     rain_prob = weather["rain_prob"]
     pm10 = weather["pm10"]
+    temp = weather.get("temp", 20.0)  # 기온 정보
 
-    # 비 올 확률이 크면 실외(high intensity) 프로그램 제거
+    # 1) 비 올 확률이 크면 실외 운동 제거
     if rain_prob > 0.6:
-        df = df[~((df["is_indoor"] == False) & (df["intensity_level"] == "high"))]
+        # 비 올 확률이 60% 이상이면 모든 실외 운동 제거
+        df = df[df["is_indoor"] == True]
 
-    # 미세먼지가 매우 높으면 실외 운동 제거 (PM10 > 150: 나쁨)
+    # 2) 미세먼지가 매우 높으면 실외 운동 제거 (PM10 > 150: 나쁨)
     if pm10 > 150:
         # 실외 운동 모두 제거
         df = df[df["is_indoor"] == True]
     elif pm10 > 80:
         # 미세먼지가 높으면 실외 고강도 운동 제거
+        df = df[~((df["is_indoor"] == False) & (df["intensity_level"] == "high"))]
+
+    # 3) 기온이 너무 높거나 낮으면 실외 운동 제거
+    # 노인 기준: 30도 이상 또는 -5도 이하
+    if temp >= 30.0 or temp <= -5.0:
+        # 폭염/한파 상황에서는 실외 운동 제거
+        df = df[df["is_indoor"] == True]
+    elif temp >= 28.0 or temp <= 0.0:
+        # 더위/추위가 심하면 실외 고강도 운동 제거
         df = df[~((df["is_indoor"] == False) & (df["intensity_level"] == "high"))]
 
     return df
