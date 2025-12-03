@@ -75,8 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _reason = topRec['reason'] ?? "";
             
             // 좌표 정보 업데이트 (서버 응답에 포함되어 있다면)
-            // _targetLat = topRec['lat'] ?? 37.5642; 
-            // _targetLon = topRec['lon'] ?? 126.9366;
+            _targetLat = topRec['lat'] ?? 37.5642; 
+            _targetLon = topRec['lon'] ?? 126.9366;
             
             String rain = (weather['rain_prob'] > 30) ? "비" : "맑음";
             _weatherText = "기온 ${weather['temp']}°C, $rain";
