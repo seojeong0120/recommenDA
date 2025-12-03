@@ -1,27 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart'; 
-import 'package:flutter_naver_map/flutter_naver_map.dart'; // [필수] 지도 패키지
-import 'signup.dart'; 
+import 'package:flutter_naver_map/flutter_naver_map.dart'; 
+import 'login_screen.dart'; // [변경] 로그인 화면
 import 'notification.dart'; 
 
 void main() async {
-  // 1. 플러터 엔진 초기화 (필수)
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 2. 환경변수 로드
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     print("⚠️ .env 로드 실패 (무시): $e");
   }
 
-  // 3. [복구됨] 네이버 지도 SDK 초기화 (이게 꼭 있어야 합니다!)
+  // 네이버 지도 초기화
   try {
     await NaverMapSdk.instance.initialize(
-      // 1순위: .env 파일에서 가져오기
-      // 2순위: .env가 안 되면 여기에 직접 '클라이언트 ID'를 문자열로 넣으세요!
-      clientId: dotenv.env['NAVER_MAP_CLIENT_ID'] ?? '!!', 
+      clientId: dotenv.env['NAVER_MAP_CLIENT_ID'] ?? 'YOUR_CLIENT_ID', 
       onAuthFailed: (ex) {
         print("********* 네이버 지도 인증 실패: $ex *********");
       },
@@ -30,14 +26,11 @@ void main() async {
     print("네이버 지도 초기화 중 에러 발생: $e");
   }
 
-  // 4. 알림 서비스 등 기타 초기화 (비동기로 실행)
   _initServices(); 
 
-  // 5. 앱 실행
   runApp(const MyApp());
 }
 
-// 기타 서비스 초기화 함수
 Future<void> _initServices() async {
   try {
     final notificationService = NotificationService();
@@ -78,7 +71,8 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const SignUpPage(title: '회원가입'),
+      // [중요] 앱 시작 시 로그인 화면부터 시작
+      home: const LoginScreen(),
     );
   }
 }
