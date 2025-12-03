@@ -7,13 +7,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'home_screen.dart';
 
 class UserLocationScreen extends StatefulWidget {
-<<<<<<< HEAD
   final String userId; // 사용자가 입력한 아이디
   final String password;
-=======
-  final String userId; // [신규]
-  final String password; // [신규]
->>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
   final String name;
   final String birthdate;
   final String gender;
@@ -123,28 +118,16 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
     return "any";
   }
 
-<<<<<<< HEAD
-=======
-// ... (위쪽 import는 그대로) ...
-
-  // 회원가입 API 호출 함수
->>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
+  // 회원가입 API 호출 (서버의 UserCreateRequest 스펙에 맞춤)
   Future<void> _registerAndGoHome() async {
-    // 에뮬레이터용 주소 (10.0.2.2)
     const String apiUrl = "http://10.0.2.2:8000/api/user"; 
     
     setState(() => _isLoading = true);
 
     try {
-<<<<<<< HEAD
-      // [API 맞춤] api.py의 UserCreateRequest 모델에 맞춰 데이터 구성
       final Map<String, dynamic> requestBody = {
-        // api.py에서는 'phone' 필드를 로그인 ID로 사용합니다.
-        "phone": widget.userId,  // 사용자가 입력한 아이디를 phone 필드에 매핑
-=======
-      final Map<String, dynamic> requestBody = {
-        "username": widget.userId,
->>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
+        // [핵심] api.py는 'phone' 필드를 ID로 사용함. 입력받은 userId를 phone에 넣어서 보냄.
+        "phone": widget.userId,  
         "password": widget.password,
         "nickname": widget.name,
         "age_group": _calculateAgeGroup(widget.birthdate),
@@ -159,26 +142,14 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
 
       final response = await http.post(
         Uri.parse(apiUrl),
-<<<<<<< HEAD
-        // 한글 깨짐 방지 헤더 설정
+        // 한글 깨짐 방지 표준 헤더
         headers: {
           "Content-Type": "application/json; charset=UTF-8",
         },
-        // jsonEncode로 변환하여 전송
         body: jsonEncode(requestBody),
-=======
-        headers: {
-          // [핵심] 여기서 UTF-8임을 명시하면, body가 String이어도 알아서 잘 처리해줍니다.
-          "Content-Type": "application/json; charset=UTF-8", 
-        },
-        // [변경] utf8.encode()를 제거하고, 그냥 json string을 보냅니다.
-        body: jsonEncode(requestBody), 
->>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
       );
 
-      // --- 응답 처리 ---
       if (response.statusCode == 200) {
-        // 한글 깨짐 방지를 위해 bodyBytes를 decode 합니다.
         final userData = jsonDecode(utf8.decode(response.bodyBytes));
         
         if (!mounted) return;
@@ -211,11 +182,7 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
           ),
         );
       } else {
-<<<<<<< HEAD
-        // 에러 메시지 디코딩 시도
-=======
-        // 에러 메시지도 한글 디코딩 시도
->>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
+        // 에러 메시지도 디코딩 시도
         String errorDetail = response.body;
         try {
            errorDetail = utf8.decode(response.bodyBytes);
@@ -224,18 +191,12 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
       }
     } catch (e) {
       print("가입 에러: $e");
-<<<<<<< HEAD
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류가 발생했습니다. 다시 시도해주세요.")));
-=======
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("오류가 발생했습니다. 다시 시도해주세요.")),
-      );
->>>>>>> 6f0b9ce7f2b49bf894db922eed57eccd4949f933
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-// ... (나머지 코드는 그대로) ...
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
