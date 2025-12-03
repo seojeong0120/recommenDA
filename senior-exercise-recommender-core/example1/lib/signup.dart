@@ -11,28 +11,23 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
+  // 컨트롤러 추가 (ID, PW)
+  final TextEditingController _idController = TextEditingController();
+  final TextEditingController _pwController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _birthController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _guardianPhoneController = TextEditingController();
 
-  // 1. 성별 (단일 선택)
   String? _selectedGender;
-
-  // 2. 건강 상태 (복수 선택 가능)
   final List<String> _selectedHealthIssues = [];
   final List<String> _healthOptions = ["무릎 통증", "고혈압", "허리 통증", "관절염", "해당 없음"];
-
-  // 3. 운동 목적 (복수 선택 가능)
   final List<String> _selectedGoals = [];
   final List<String> _goalOptions = ["혈압 조절", "체중 감량", "건강 증진", "유연성 강화", "사회 활동"];
-
-  // [추가됨] 4. 선호하는 장소 (단일 선택)
-  String? _selectedPreference; // "실내", "실외", "둘 다"
+  String? _selectedPreference;
 
   bool _isButtonActive = false;
 
-  // 날짜 유효성 검사
   bool _isValidDate(String input) {
     if (input.length != 6) return false;
     int month = int.tryParse(input.substring(2, 4)) ?? 0;
@@ -42,33 +37,31 @@ class _SignUpPageState extends State<SignUpPage> {
     return true;
   }
 
-  // 유효성 검사 (필수 항목 체크)
   void _checkFormValidity() {
+    // 유효성 검사 항목 추가 (ID, PW)
+    bool isIdValid = _idController.text.isNotEmpty;
+    bool isPwValid = _pwController.text.length >= 4; // 최소 4자리
     bool isNameValid = _nameController.text.isNotEmpty;
     bool isBirthValid = _isValidDate(_birthController.text);
     bool isGenderValid = _selectedGender != null;
-    
-    // [추가됨] 장소 선택 여부 확인
     bool isPlaceValid = _selectedPreference != null;
     
-    // 건강 상태와 목적은 하나 이상 선택해야 한다고 가정 (필수가 아니라면 이 줄 제거 가능)
-    bool isHealthSelected = _selectedHealthIssues.isNotEmpty; 
-    bool isGoalSelected = _selectedGoals.isNotEmpty;
+    // 건강 상태와 목적은 필수 아님 (선택사항)
+    // bool isHealthSelected = _selectedHealthIssues.isNotEmpty; 
+    // bool isGoalSelected = _selectedGoals.isNotEmpty;
 
     RegExp phoneRegex = RegExp(r'^010-\d{4}-\d{4}$');
     bool isPhoneValid = phoneRegex.hasMatch(_phoneController.text);
     bool isGuardianPhoneValid = phoneRegex.hasMatch(_guardianPhoneController.text);
 
-    bool isValid = isNameValid && isBirthValid && isGenderValid && 
-                   isPlaceValid && isHealthSelected && isGoalSelected &&
-                   isPhoneValid && isGuardianPhoneValid;
+    bool isValid = isIdValid && isPwValid && isNameValid && isBirthValid && isGenderValid && 
+                   isPlaceValid && isPhoneValid && isGuardianPhoneValid;
 
     if (isValid != _isButtonActive) {
       setState(() { _isButtonActive = isValid; });
     }
   }
 
-  // 복수 선택 토글 로직
   void _toggleMultiSelect(List<String> list, String value) {
     setState(() {
       if (value == "해당 없음") {
@@ -76,7 +69,6 @@ class _SignUpPageState extends State<SignUpPage> {
         list.add(value);
       } else {
         if (list.contains("해당 없음")) list.remove("해당 없음");
-
         if (list.contains(value)) {
           list.remove(value);
         } else {
@@ -97,8 +89,31 @@ class _SignUpPageState extends State<SignUpPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("맞춤 운동 추천을 위해\n상세 정보를 알려주세요.", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+              const Text("회원가입을 위해\n정보를 입력해주세요.", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
               const SizedBox(height: 30),
+
+              // [신규] 아이디
+              _buildLabel("아이디"),
+              _buildTextField(controller: _idController, hint: "아이디 입력", inputType: TextInputType.text),
+              const SizedBox(height: 24),
+
+              // [신규] 비밀번호
+              _buildLabel("비밀번호"),
+              TextField(
+                controller: _pwController,
+                obscureText: true,
+                onChanged: (v) => _checkFormValidity(),
+                style: const TextStyle(fontSize: 22),
+                decoration: InputDecoration(
+                  hintText: "비밀번호 입력",
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 18),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 24),
 
               _buildLabel("이름"),
               _buildTextField(controller: _nameController, hint: "이름 입력", inputType: TextInputType.text),
@@ -116,7 +131,6 @@ class _SignUpPageState extends State<SignUpPage> {
               ]),
               const SizedBox(height: 24),
 
-              // 건강 상태 (복수 선택 - Wrap 사용)
               _buildLabel("건강 상태 (중복 선택 가능)"),
               Wrap(
                 spacing: 8.0, 
@@ -127,7 +141,6 @@ class _SignUpPageState extends State<SignUpPage> {
               ),
               const SizedBox(height: 24),
 
-              // 운동 목적 (복수 선택 - Wrap 사용)
               _buildLabel("운동 목적 (중복 선택 가능)"),
               Wrap(
                 spacing: 8.0,
@@ -138,7 +151,6 @@ class _SignUpPageState extends State<SignUpPage> {
               ),
               const SizedBox(height: 24),
 
-              // [추가됨] 선호하는 장소 (단일 선택)
               _buildLabel("선호하는 장소"),
               Row(children: [
                 Expanded(child: _buildSingleSelectButton("실내", _selectedPreference, (v) => setState((){ _selectedPreference = v; _checkFormValidity(); }))),
@@ -162,17 +174,18 @@ class _SignUpPageState extends State<SignUpPage> {
                 height: 60,
                 child: ElevatedButton(
                   onPressed: _isButtonActive ? () {
-                    // 다음 화면으로 데이터 전달 (장소 선호도 포함)
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => UserLocationScreen(
+                          userId: _idController.text, // ID 전달
+                          password: _pwController.text, // PW 전달
                           name: _nameController.text,
                           birthdate: _birthController.text,
                           gender: _selectedGender!,
-                          healthIssues: _selectedHealthIssues, // 리스트 전달
-                          goals: _selectedGoals,               // 리스트 전달
-                          preference: _selectedPreference!,    // [추가됨] 장소 선호도 전달
+                          healthIssues: _selectedHealthIssues,
+                          goals: _selectedGoals,
+                          preference: _selectedPreference!,
                         ),
                       ),
                     );
@@ -183,7 +196,7 @@ class _SignUpPageState extends State<SignUpPage> {
                     textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('정보 입력 완료'),
+                  child: const Text('다음 단계로'),
                 ),
               ),
             ],
@@ -208,7 +221,6 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 
-  // 단일 선택 버튼 (성별, 장소)
   Widget _buildSingleSelectButton(String value, String? groupValue, Function(String) onTap) {
     bool isSelected = groupValue == value;
     return GestureDetector(
@@ -225,7 +237,6 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 
-  // 복수 선택 칩 (건강, 목적)
   Widget _buildMultiSelectChip(String label, List<String> selectedList) {
     bool isSelected = selectedList.contains(label);
     return GestureDetector(
