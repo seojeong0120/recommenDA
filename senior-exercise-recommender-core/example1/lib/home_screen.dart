@@ -3,7 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'map_screen.dart';
-import 'home_exercise_screen.dart'; 
+import 'home_exercise_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic> userProfile; 
@@ -124,6 +125,33 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: primaryGreen,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final shouldLogout = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('로그아웃'),
+                  content: const Text('로그아웃 하시겠습니까?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+                    TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('로그아웃')),
+                  ],
+                ),
+              );
+
+              if (shouldLogout == true) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            child: const Text('로그아웃', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator()) 

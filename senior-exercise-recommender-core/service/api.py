@@ -93,6 +93,10 @@ class UserCreateRequest(BaseModel):
     preference_env: str = "any"
     home_lat: Optional[float] = None
     home_lon: Optional[float] = None
+    guardian_phone: Optional[str] = None
+    address_road: Optional[str] = None
+    birth_date: Optional[str] = None
+    gender: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: int
@@ -312,14 +316,14 @@ async def create_user(request: UserCreateRequest):
         user = repo.create_user(
             password=request.password,  # 사용자가 입력한 비밀번호
             name=request.nickname,
-            birth_date=default_birth_date,  # ⚠️ 임시 - Flutter 앱에서 받아야 함
-            gender="미지정",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            birth_date=request.birth_date or default_birth_date,
+            gender=request.gender or "미지정",
             health_conditions=request.health_issues,
             exercise_goals=request.goals,
             preferred_location=preferred_location,
             phone=request.phone,  # 사용자가 입력한 전화번호 (로그인 ID)
-            guardian_phone="010-0000-0000",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
-            address_road="주소 미입력",  # ⚠️ 임시 - Flutter 앱에서 받아야 함
+            guardian_phone=request.guardian_phone or "010-0000-0000",
+            address_road=request.address_road or "주소 미입력",
             latitude=request.home_lat or 37.5665,
             longitude=request.home_lon or 126.9780,
         )
