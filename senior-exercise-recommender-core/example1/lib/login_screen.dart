@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse(apiUrl),
         headers: {"Content-Type": "application/json; charset=UTF-8"},
         body: jsonEncode({
-          "username": id, // 서버가 LoginRequest에서 username 필드를 쓴다면 이렇게 보냄
+          "phone": id, // 서버가 LoginRequest에서 username 필드를 쓴다면 이렇게 보냄
           "password": pw,
         }),
       );
