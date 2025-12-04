@@ -30,7 +30,6 @@ class MapScreen extends StatelessWidget {
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            // [수정] 여기에 본인의 진짜 패키지 이름을 넣어야 차단되지 않습니다!
             userAgentPackageName: 'com.example.example1', 
           ),
           MarkerLayer(
