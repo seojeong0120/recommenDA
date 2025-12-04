@@ -10,5 +10,29 @@
       "혼자여부": "y",
       "url": "https://www.youtube.com/watch?v=HY2Yu8DeasQ"
     }
+  },
+  "user_37.496887799999996_127.14499359999999": {
+    "last_date": "2025-12-04",
+    "last_body": "둔부",
+    "today_exercise": {
+      "Name": "엉덩이 스트레칭",
+      "체력항목": "유연성",
+      "운동도구": "맨몸",
+      "신체부위": "둔부",
+      "혼자여부": "y",
+      "url": "https://www.youtube.com/watch?v=6_zf8p4suaA"
+    }
+  },
+  "user_37.506755_127.1390667": {
+    "last_date": "2025-12-04",
+    "last_body": "목",
+    "today_exercise": {
+      "Name": "목 스트레칭",
+      "체력항목": "유연성",
+      "운동도구": "맨몸",
+      "신체부위": "목",
+      "혼자여부": "y",
+      "url": "https://www.youtube.com/watch?v=z2N8VCjEHdY"
+    }
   }
 }
