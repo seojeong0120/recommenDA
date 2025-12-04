@@ -38,6 +38,7 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
   bool _isLocationFound = false;
   double? _lat;
   double? _lon;
+  String? _addressRoad; // 도로명 주소 저장
 
   final String _kakaoRestApiKey = dotenv.env['KAKAO_API_KEY'] ?? "";
 
@@ -76,12 +77,24 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
       if (response.statusCode == 200) {
         var documents = jsonDecode(response.body)['documents'];
         if (documents != null && documents.length > 0) {
-          var addressInfo = documents[0]['road_address'] ?? documents[0]['address'];
+          var roadAddressInfo = documents[0]['road_address'];
+          var addressInfo = documents[0]['address'];
+          
           setState(() {
-            _address = "${addressInfo['address_name']} \n ${addressInfo['building_name'] ?? ''}";
+            _lat = lat;
+            _lon = lng;
+            // 도로명 주소 우선, 없으면 지번 주소 사용
+            if (roadAddressInfo != null) {
+              _address = roadAddressInfo['address_name'] ?? "";
+              _addressRoad = roadAddressInfo['address_name'] ?? "";
+            } else {
+              _address = addressInfo['address_name'] ?? "";
+              _addressRoad = addressInfo['address_name'] ?? "";
+            }
             _isLoading = false;
             _isLocationFound = true;
           });
+          print("주소 저장: $_addressRoad");
         }
       }
     } catch (e) { print(e); setState(() => _isLoading = false); }
@@ -92,11 +105,13 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
     if (result != null) {
       setState(() {
         _address = result.address;
+        _addressRoad = result.address; // 검색한 주소도 저장
         _lat = result.latitude;
         _lon = result.longitude;
         _isLocationFound = true;
         _isLoading = false;
       });
+      print("검색한 주소 저장: $_addressRoad");
     }
   }
 
@@ -134,6 +149,7 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
         "health_issues": widget.healthIssues,
         "goals": widget.goals,
         "preference_env": _mapPreferenceToApi(widget.preference),
+        "address_road": _addressRoad ?? _address, // 도로명 주소 전송
         "home_lat": _lat ?? 37.5665,
         "home_lon": _lon ?? 126.9780,
       };
