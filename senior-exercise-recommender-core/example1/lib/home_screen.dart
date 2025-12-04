@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          "날씨가 흐리네요. 실내 운동은 어떠세요?",
+                          "간단한 실내 운동은 어떠세요?",
                           style: TextStyle(fontSize: 16, color: Colors.black54),
                         ),
                         const SizedBox(height: 16),
