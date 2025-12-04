@@ -78,7 +78,7 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
         if (documents != null && documents.length > 0) {
           var addressInfo = documents[0]['road_address'] ?? documents[0]['address'];
           setState(() {
-            _address = "${addressInfo['address_name']} ${addressInfo['building_name'] ?? ''}";
+            _address = "${addressInfo['address_name']} \n ${addressInfo['building_name'] ?? ''}";
             _isLoading = false;
             _isLocationFound = true;
           });
@@ -217,6 +217,12 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
                    Text(_address, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 ],
               ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "위치 확인에 실패하는 경우,\n'아니요' 버튼을 눌러 직접 주소를 검색해주세요.",
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
             const Spacer(),
             Row(children: [
