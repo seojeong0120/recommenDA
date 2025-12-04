@@ -104,6 +104,15 @@ class UserResponse(BaseModel):
     home_lat: Optional[float]
     home_lon: Optional[float]
 
+class LoginRequest(BaseModel):
+    phone: str  # 로그인 ID (전화번호)
+    password: str  # 비밀번호
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+    user: Optional[UserResponse] = None
+
 class JoinSessionRequest(BaseModel):
     user_id: int
     fac_id: str
@@ -330,8 +339,65 @@ async def create_user(request: UserCreateRequest):
             home_lon=float(user['longitude']),
         )
         
+    except HTTPException:
+        raise # 400 오류는 그대로 전달
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"사용자 생성 중 오류 발생: {str(e)}")
+
+@app.post("/api/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    """
+    로그인 (전화번호 + 비밀번호)
+    
+    전화번호를 ID로 사용하여 로그인합니다.
+    """
+    try:
+        from db.user_repository import UserRepository
+        
+        repo = UserRepository()
+        
+        # 로그인 시도
+        user = repo.login(request.phone, request.password)
+        
+        if not user:
+            return LoginResponse(
+                success=False,
+                message="전화번호 또는 비밀번호가 올바르지 않습니다.",
+                user=None
+            )
+        
+        # preference_env 변환 (한글 -> 영어)
+        preference_map = {
+            "실내": "indoor",
+            "실외": "outdoor",
+            "둘 다": "any"
+        }
+        preference_env = preference_map.get(user.get('preferred_location', '둘 다'), "any")
+        
+        # birth_date에서 age_group 추정 (간단한 버전)
+        # 실제로는 정확한 계산이 필요하지만, 여기서는 임시로 처리
+        age_group = "60-64"  # 임시값, 나중에 birth_date에서 계산 필요
+        
+        # UserResponse 형식으로 변환
+        user_response = UserResponse(
+            id=user['id'],
+            nickname=user['name'],
+            age_group=age_group,  # 임시값
+            health_issues=user.get('health_conditions', []),
+            goals=user.get('exercise_goals', []),
+            preference_env=preference_env,
+            home_lat=float(user.get('latitude', 37.5665)),
+            home_lon=float(user.get('longitude', 126.9780)),
+        )
+        
+        return LoginResponse(
+            success=True,
+            message="로그인 성공",
+            user=user_response
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"로그인 중 오류 발생: {str(e)}")
 
 @app.get("/api/users", response_model=List[dict])
 async def get_all_users():
