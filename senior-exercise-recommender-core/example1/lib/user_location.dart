@@ -15,6 +15,7 @@ class UserLocationScreen extends StatefulWidget {
   final List<String> healthIssues;
   final List<String> goals;
   final String preference;
+  final String guardianPhone;
 
   const UserLocationScreen({
     super.key,
@@ -26,6 +27,7 @@ class UserLocationScreen extends StatefulWidget {
     required this.healthIssues,
     required this.goals,
     required this.preference,
+    required this.guardianPhone,
   });
 
   @override
@@ -146,9 +148,12 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
         "password": widget.password,
         "nickname": widget.name,
         "age_group": _calculateAgeGroup(widget.birthdate),
+        "birth_date": widget.birthdate,
+        "gender": widget.gender,
         "health_issues": widget.healthIssues,
         "goals": widget.goals,
         "preference_env": _mapPreferenceToApi(widget.preference),
+        "guardian_phone": widget.guardianPhone,
         "address_road": _addressRoad ?? _address, // 도로명 주소 전송
         "home_lat": _lat ?? 37.5665,
         "home_lon": _lon ?? 126.9780,

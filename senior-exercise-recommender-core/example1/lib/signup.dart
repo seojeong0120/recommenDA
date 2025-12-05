@@ -16,8 +16,11 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _pwController = TextEditingController(); // 비밀번호
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _birthController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController(); // 연락처(선택)
+  // removed optional contact field controller
   final TextEditingController _guardianPhoneController = TextEditingController();
+  String? _idError;
+  String? _guardianError;
+  String? _nameError;
 
   String? _selectedGender;
   final List<String> _selectedHealthIssues = [];
@@ -38,19 +41,46 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _checkFormValidity() {
-    bool isIdValid = _idController.text.isNotEmpty;
+    final phoneRegex = RegExp(r'^[0-9-]+$');
+    final nameRegex = RegExp(r'^[가-힣a-zA-Z\s]+$');
+
+    // ID (phone) validation
+    if (_idController.text.isEmpty) {
+      _idError = '아이디를 입력해주세요.';
+    } else if (!phoneRegex.hasMatch(_idController.text)) {
+      _idError = '숫자 또는 -만 입력할 수 있습니다.';
+    } else {
+      _idError = null;
+    }
+
+    // Name validation
+    if (_nameController.text.isEmpty) {
+      _nameError = '이름을 입력해주세요.';
+    } else if (!nameRegex.hasMatch(_nameController.text)) {
+      _nameError = '이름은 한글 또는 영문만 입력해주세요.';
+    } else {
+      _nameError = null;
+    }
+
+    // Guardian phone validation (required)
+    if (_guardianPhoneController.text.isEmpty) {
+      _guardianError = '보호자 연락처를 입력해주세요.';
+    } else if (!phoneRegex.hasMatch(_guardianPhoneController.text)) {
+      _guardianError = '숫자 또는 -만 입력할 수 있습니다.';
+    } else {
+      _guardianError = null;
+    }
+
+    bool isIdValid = _idError == null;
     bool isPwValid = _pwController.text.length >= 4;
-    bool isNameValid = _nameController.text.isNotEmpty;
+    bool isNameValid = _nameError == null;
     bool isBirthValid = _isValidDate(_birthController.text);
     bool isGenderValid = _selectedGender != null;
     bool isPlaceValid = _selectedPreference != null;
-    
-    // 필수 항목이 다 입력되었는지 확인
-    bool isValid = isIdValid && isPwValid && isNameValid && isBirthValid && isGenderValid && isPlaceValid;
 
-    if (isValid != _isButtonActive) {
-      setState(() { _isButtonActive = isValid; });
-    }
+    bool isValid = isIdValid && isPwValid && isNameValid && isBirthValid && isGenderValid && isPlaceValid && _guardianError == null;
+
+    setState(() { _isButtonActive = isValid; });
   }
 
   void _toggleMultiSelect(List<String> list, String value) {
@@ -85,7 +115,25 @@ class _SignUpPageState extends State<SignUpPage> {
 
               // [신규] 아이디 (api.py의 phone 필드로 사용됨)
               _buildLabel("아이디 (로그인용)"),
-              _buildTextField(controller: _idController, hint: "아이디(전화번호) 입력", inputType: TextInputType.text),
+              TextField(
+                controller: _idController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9-]'))],
+                onChanged: (v) => _checkFormValidity(),
+                style: const TextStyle(fontSize: 22),
+                decoration: InputDecoration(
+                  hintText: "010-0000-0000",
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 18),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              if (_idError != null) Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                child: Text(_idError!, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+              ),
               const SizedBox(height: 24),
 
               // [신규] 비밀번호
@@ -108,6 +156,10 @@ class _SignUpPageState extends State<SignUpPage> {
 
               _buildLabel("이름"),
               _buildTextField(controller: _nameController, hint: "이름 입력", inputType: TextInputType.text),
+              if (_nameError != null) Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                child: Text(_nameError!, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+              ),
               const SizedBox(height: 24),
 
               _buildLabel("생년월일 (6자리)"),
@@ -140,8 +192,25 @@ class _SignUpPageState extends State<SignUpPage> {
               ]),
               const SizedBox(height: 24),
 
-              _buildLabel("연락처 (선택)"),
-              _buildTextField(controller: _phoneController, hint: "010-0000-0000", inputType: TextInputType.phone),
+              _buildLabel("보호자 연락처 (필수)"),
+              TextField(
+                controller: _guardianPhoneController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9-]'))],
+                onChanged: (v) => _checkFormValidity(),
+                style: const TextStyle(fontSize: 22),
+                decoration: InputDecoration(
+                  hintText: "010-0000-0000",
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              if (_guardianError != null) Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                child: Text(_guardianError!, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+              ),
               const SizedBox(height: 50),
 
               SizedBox(
@@ -161,6 +230,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           healthIssues: _selectedHealthIssues,
                           goals: _selectedGoals,
                           preference: _selectedPreference!,
+                          guardianPhone: _guardianPhoneController.text,
                         ),
                       ),
                     );
