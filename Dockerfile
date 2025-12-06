@@ -23,5 +23,4 @@ COPY senior-exercise-recommender-core /app
 ENV PORT=8000
 EXPOSE 8000
 
-# FastAPI: api.py 파일 안에 app = FastAPI() 인 경우
-CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn service.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
