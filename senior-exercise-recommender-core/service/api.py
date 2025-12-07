@@ -4,6 +4,7 @@ FastAPI 기반 REST API 서버
 Flutter 앱에서 사용할 수 있는 API 엔드포인트 제공
 """
 import sys
+import re
 from datetime import date
 from typing import List, Optional
 from pathlib import Path
@@ -39,6 +40,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def normalize_phone(phone: str) -> str:
+    """
+    전화번호 정규화
+    """
+    return re.sub(r"\D", "", phone)
 
 # ==================== Pydantic 모델 정의 ====================
 
@@ -290,13 +297,21 @@ async def create_user(request: UserCreateRequest):
         from db.user_repository import UserRepository
         
         repo = UserRepository()
+
+        # 전화번호 정규화
+        normalized_phone = normalize_phone(request.phone)
+        normalized_guardian_phone = (
+            normalize_phone(request.guardian_phone) 
+            if request.guardian_phone
+            else "01000000000"
+        )
         
-        # 전화번호 중복 확인
-        existing_user = repo.get_user_by_phone(request.phone)
+        # 전화번호 중복 확인도 정규화된 값으로
+        existing_user = repo.get_user_by_phone(normalized_phone)
         if existing_user:
             raise HTTPException(
                 status_code=400,
-                detail=f"이미 등록된 전화번호입니다: {request.phone}"
+                detail=f"이미 등록된 전화번호입니다: {normalized_phone}"
             )
         
         # Flutter 앱 데이터를 새 PostgreSQL 스키마로 변환
@@ -321,8 +336,8 @@ async def create_user(request: UserCreateRequest):
             health_conditions=request.health_issues,
             exercise_goals=request.goals,
             preferred_location=preferred_location,
-            phone=request.phone,  # 사용자가 입력한 전화번호 (로그인 ID)
-            guardian_phone=request.guardian_phone or "010-0000-0000",
+            phone=normalized_phone,  # 정규화된 전화번호 (로그인 ID)
+            guardian_phone=normalized_guardian_phone,
             address_road=request.address_road or "주소 미입력",
             latitude=request.home_lat or 37.5665,
             longitude=request.home_lon or 126.9780,
@@ -359,9 +374,11 @@ async def login(request: LoginRequest):
         from db.user_repository import UserRepository
         
         repo = UserRepository()
+
+        normalized_phone = normalize_phone(request.phone)
         
         # 로그인 시도
-        user = repo.login(request.phone, request.password)
+        user = repo.login(normalized_phone, request.password)
         
         if not user:
             return LoginResponse(

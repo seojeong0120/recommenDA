@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'map_screen.dart';
 import 'home_exercise_screen.dart';
 import 'login_screen.dart';
+import 'config.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic> userProfile; 
@@ -42,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchRecommendation() async {
-    const String apiUrl = "http://10.0.2.2:8000/api/recommend";
+    final String apiUrl = '$backendBaseUrl/api/recommend';
 
     try {
       final Map<String, dynamic> requestBody = {
