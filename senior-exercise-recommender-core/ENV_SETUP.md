@@ -61,11 +61,13 @@ KMA_SERVICE_KEY=여기에_기상청_API_키_입력
 
 ```bash
 # OpenWeatherMap API 키
-OPENWEATHER_API_KEY=27fa9aceb5e62efad83670a032666c3e
+OPENWEATHER_API_KEY=your_openweather_api_key_here
 
 # 기상청 API 키 (공공데이터포털)
-KMA_SERVICE_KEY=abcd1234efgh5678ijkl9012mnop3456qrst7890uvwx%3D%3D
+KMA_SERVICE_KEY=your_kma_service_key_here
 ```
+
+**주의**: 위 예시는 더미 값입니다. 실제 API 키로 교체해야 합니다.
 
 **주의사항:**
 - 따옴표 없이 입력
