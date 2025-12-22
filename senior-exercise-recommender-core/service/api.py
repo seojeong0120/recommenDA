@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from recommender.exercise_recommender import load_exercises, choose_exercises_with_llm_for_today
 
 # 프로젝트 루트를 path에 추가
 project_root = Path(__file__).resolve().parents[1]
@@ -84,6 +85,9 @@ class ExerciseVideoResponse(BaseModel):
     혼자여부: str
     url: str
     info: str  # 포맷된 정보
+    reason: Optional[List[str]] = None
+    cautions: Optional[List[str]] = None
+    next_step: Optional[str] = None
 
 class RecommendResponse(BaseModel):
     recommendations: List[RecommendationResponse]
@@ -247,26 +251,41 @@ async def get_recommendations(request: RecommendRequest):
                     # 날씨가 위험하면 실내 운동 영상 추천
                     exercises = load_exercises()
                     if exercises:
-                        # 사용자 ID는 임시로 생성 (실제로는 요청에서 받아야 함)
-                        user_id = f"user_{user_location['lat']}_{user_location['lon']}"
-                        exercise = choose_exercise_for_today(
-                            exercises,
-                            user_id=user_id,
-                            today_date=None,
+                        user_id = f"user_{user_location['lat']}_{user_location['lon']}"  # TODO: 실제 user_id로
+                    llm_context = {
+                    "weather_summary": "위험",  # 원하면 weather_text 같은 걸 넣어도 좋음
+                    "temperature_c": weather_info.get("temp"),
+                    "precipitation_prob": weather_info.get("rain_prob"),
+                    "pm25": None,
+                    "time_of_day": "day" if weather_info.get("is_daytime") else "night",
+                    "max_distance_km": 0.0,
+                    }
+                    llm_result = choose_exercises_with_llm_for_today(
+                        exercises=exercises,
+                        user_profile=user_profile,
+                        context=llm_context,
+                        user_id=user_id,
+                        today_date=None,
+                        top_k=8,
+                        top_n=3,
+                    )
+                    exercise_videos = []
+                    for ex in llm_result.get("ranked", []):
+                        exercise_videos.append(
+                            ExerciseVideoResponse(
+                                name=ex.get("Name", ""),
+                                체력항목=ex.get("체력항목", ""),
+                                운동도구=ex.get("운동도구", ""),
+                                신체부위=ex.get("신체부위", ""),
+                                혼자여부=ex.get("혼자여부", ""),
+                                url=ex.get("url", ""),
+                                info=f"체력항목: {ex.get('체력항목', '')} | 도구: {ex.get('운동도구', '')} | 부위: {ex.get('신체부위', '')}",
+                                reason=ex.get("why"),
+                                cautions=ex.get("cautions"),
+                                next_step=ex.get("next_step"),
+                            )
                         )
                         
-                        if exercise:
-                            exercise_videos = [
-                                ExerciseVideoResponse(
-                                    name=exercise.get("Name", ""),
-                                    체력항목=exercise.get("체력항목", ""),
-                                    운동도구=exercise.get("운동도구", ""),
-                                    신체부위=exercise.get("신체부위", ""),
-                                    혼자여부=exercise.get("혼자여부", ""),
-                                    url=exercise.get("url", ""),
-                                    info=f"체력항목: {exercise.get('체력항목', '')} | 도구: {exercise.get('운동도구', '')} | 부위: {exercise.get('신체부위', '')}",
-                                )
-                            ]
         except Exception as e:
             # 날씨 평가 실패해도 추천은 계속 진행
             print(f"날씨 위험 평가 중 오류: {e}")

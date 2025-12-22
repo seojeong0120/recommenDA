@@ -26,6 +26,7 @@ recommenDA/
 - **날씨 기반 추천**: 실내/실외 운동 자동 판단
 - **위치 기반 추천**: 사용자 위치 기반 가까운 운동 시설 추천
 - **커뮤니티 기능**: 운동 기록 및 공유
+- **LLM 기반 리랭킹 및 설명 생성**: 룰/스코어 기반으로 생성한 운동 영상 후보 Top-K에 대해 LLM이 재정렬(rerank)하고, 추천 근거/주의사항/요약 문장을 자연어로 생성
 
 ## 기술 스택
 
@@ -34,6 +35,7 @@ recommenDA/
 - FastAPI
 - PostgreSQL
 - Docker
+- Upstage Solar (LLM, 선택적으로 사용)
 
 ### 프론트엔드
 - Flutter
@@ -55,6 +57,21 @@ cd senior-exercise-recommender-core
 pip install -r requirements.txt
 uvicorn service.api:app --host 0.0.0.0 --port 8000
 ```
+
+### LLM(Upstage) 연동 설정
+
+기본값은 개발용 더미(`LLM_PROVIDER=local_stub`)로 동작하며, 실제 Upstage Solar LLM을 쓰려면 아래 환경 변수를 설정합니다.
+
+- **LLM_PROVIDER**: `upstage`
+- **LLM_MODEL**: `solar-pro` 등 사용하고 싶은 모델 이름
+- **LLM_API_KEY**: Upstage API 키
+- **UPSTAGE_BASE_URL**: (선택) 기본값 `https://api.upstage.ai/v1/solar`
+
+추천 파이프라인에서는 다음 순서로 LLM을 사용합니다.
+
+1. 룰/스코어 기반 후보 생성: `generate_exercise_candidates`가 운동 영상 데이터에서 안전하고 합리적인 Top-K 후보를 만듭니다.
+2. LLM 리랭킹 + 설명/주의 생성: `LLMRerankerExplainer`가 후보들을 사용자 프로필/날씨 컨텍스트에 맞게 재정렬하고, 각 운동의 추천 근거(`why`), 주의사항(`cautions`), 오늘의 액션(`next_step`), 전역 안전 플래그(`safety_flags`)를 JSON으로 생성합니다.
+3. API 응답: `/api/recommend`에서 날씨가 위험한 경우, 위 LLM 결과를 이용해 실내 운동 영상과 함께 설명/주의사항을 클라이언트에 반환합니다.
 
 ### 프론트엔드 앱 실행
 
