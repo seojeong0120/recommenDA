@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'map_screen.dart';
+import 'recommendation_list.dart';
 import 'home_exercise_screen.dart';
 import 'login_screen.dart';
 import 'config.dart';
@@ -33,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _targetLon = 126.9780;
 
   Map<String, dynamic>? _homeExerciseData; 
-
+  List<Map<String, dynamic>> _recommendations = [];
   bool _isLoading = true;
 
   @override
@@ -71,7 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
         
         final recommendations = data['recommendations'] as List;
         final weather = data['weather_info'];
-        
         final homeVideos = data['exercise_videos'] as List?;
 
         setState(() {
@@ -79,27 +79,25 @@ class _HomeScreenState extends State<HomeScreen> {
           String rain = (weather['rain_prob'] > 30) ? "비" : "맑음";
           _weatherText = "기온 ${weather['temp']}°C, $rain";
 
-          // 2. 실내 운동 데이터
+          // 2. 실내 운동 데이터 (LLM 데이터 포함)
           if (homeVideos != null && homeVideos.isNotEmpty) {
             _homeExerciseData = homeVideos[0];
           } else {
             _homeExerciseData = null;
           }
 
-          // 3. 시설 추천 데이터 (랜덤 선택)
-          if (recommendations.isNotEmpty) {
-            final randomIndex = Random().nextInt(recommendations.length);
-            final randomRec = recommendations[randomIndex];
+          // 3. 시설 추천 데이터
+          _recommendations = recommendations.map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-            _exerciseName = randomRec['program_name'] ?? ""; 
-            _placeName = randomRec['facility_name'] ?? "추천 장소";   
-            _reason = randomRec['reason'] ?? "";
+          if (_recommendations.isNotEmpty) {
+            final topRec = _recommendations.first;
+            _exerciseName = topRec['program_name'] ?? ""; 
+            _placeName = topRec['facility_name'] ?? "추천 장소";   
+            _reason = topRec['reason'] ?? "";
             
-            // API 응답에서 좌표 파싱
-            if (randomRec['lat'] != null && randomRec['lon'] != null) {
-              _targetLat = (randomRec['lat'] as num).toDouble();
-              _targetLon = (randomRec['lon'] as num).toDouble();
-              print("MapScreen 좌표 업데이트: lat=$_targetLat, lon=$_targetLon");
+            if (topRec['lat'] != null && topRec['lon'] != null) {
+              _targetLat = (topRec['lat'] as num).toDouble();
+              _targetLon = (topRec['lon'] as num).toDouble();
             }
           } else {
             _exerciseName = "";
@@ -134,31 +132,17 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
         actions: [
-          TextButton(
+          IconButton(
+            icon: const Icon(Icons.logout),
             onPressed: () async {
-              final shouldLogout = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('로그아웃'),
-                  content: const Text('로그아웃 하시겠습니까?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
-                    TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('로그아웃')),
-                  ],
-                ),
+              // 로그아웃 로직 (간단 구현)
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
               );
-
-              if (shouldLogout == true) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-            child: const Text('로그아웃', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
+          )
         ],
       ),
       body: _isLoading 
@@ -190,12 +174,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 
                 const SizedBox(height: 30),
 
-                // [수정] 부드러운 디자인의 집에서 운동하기 카드
+                // [수정] 집에서 운동하기 카드 (LLM 데이터 전달)
                 if (_homeExerciseData != null) ...[
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade50, // 아주 연한 오렌지 배경 (경고 느낌 X)
+                      color: Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Column(
@@ -209,28 +193,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          "간단한 실내 운동은 어떠세요?",
-                          style: TextStyle(fontSize: 16, color: Colors.black54),
-                        ),
+                        const Text("날씨가 흐리네요. 실내 운동은 어떠세요?", style: TextStyle(fontSize: 16, color: Colors.black54)),
                         const SizedBox(height: 16),
                         
-                        // 운동 정보 간략 표시
                         Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _homeExerciseData!['name'],
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
+                              Text(_homeExerciseData!['name'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
-                              // [수정] info 대신 체력항목, 운동도구 사용
                               Text("• 효과: ${_homeExerciseData!['체력항목']}", style: const TextStyle(fontSize: 15, color: Colors.black87)),
                               Text("• 도구: ${_homeExerciseData!['운동도구']}", style: const TextStyle(fontSize: 15, color: Colors.black87)),
                             ],
@@ -243,15 +216,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () {
+                              // [핵심] LLM 데이터(이유, 주의사항 등)를 리스트 형태로 변환하여 전달
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => HomeExerciseScreen(
                                     exerciseName: _homeExerciseData!['name'],
-                                    // 상세 화면에도 체력항목과 운동도구를 전달
-                                    exerciseInfo: _homeExerciseData!['체력항목'] ?? "정보 없음",
-                                    equipment: _homeExerciseData!['운동도구'] ?? "맨몸",
+                                    exerciseInfo: _homeExerciseData!['info'],
+                                    equipment: _homeExerciseData!['운동도구'] ?? "정보 없음",
                                     videoUrl: _homeExerciseData!['url'],
+                                    // JSON 리스트를 List<String>으로 안전하게 변환
+                                    reasons: List<String>.from(_homeExerciseData!['reason'] ?? []),
+                                    cautions: List<String>.from(_homeExerciseData!['cautions'] ?? []),
+                                    nextStep: _homeExerciseData!['next_step'] ?? "",
                                   ),
                                 ),
                               );
@@ -271,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 30),
                 ],
                 
-                // 기존 시설 추천 카드
+                // 시설 추천 카드
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -319,6 +296,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.map, color: Colors.green),
                       label: const Text("운동 장소 지도 보기", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => RecommendationListScreen(
+                          recommendations: _recommendations,
+                          onSelect: (rec) {
+                            setState(() {
+                              _exerciseName = rec['program_name'] ?? "";
+                              _placeName = rec['facility_name'] ?? "추천 장소";
+                              _reason = rec['reason'] ?? "";
+                              if (rec['lat'] != null && rec['lon'] != null) {
+                                _targetLat = (rec['lat'] as num).toDouble();
+                                _targetLon = (rec['lon'] as num).toDouble();
+                              }
+                            });
+                          },
+                        )));
+                      },
+                      child: const Text('추천 더보기'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white),
+                      ),
                     ),
                   ]),
                 ),

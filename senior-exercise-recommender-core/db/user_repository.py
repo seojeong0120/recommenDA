@@ -47,6 +47,7 @@ class UserRepository:
         address_road: str,
         latitude: float,
         longitude: float,
+        age_group: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         회원가입 - 새 사용자 생성
@@ -74,21 +75,50 @@ class UserRepository:
             bcrypt.gensalt()
         ).decode('utf-8')
 
+        # age_group가 제공되지 않으면 birth_date에서 추정
+        def _compute_age_group_from_yymmdd(birth_yymmdd: str) -> str:
+            try:
+                s = (birth_yymmdd or '').strip()
+                if len(s) != 6 or not s.isdigit():
+                    return "60-64"
+                yy = int(s[0:2])
+                from datetime import date
+                current_year = date.today().year
+                current_yy = current_year % 100
+                if yy <= current_yy:
+                    birth_year = 2000 + yy
+                else:
+                    birth_year = 1900 + yy
+                age = current_year - birth_year
+                if age >= 75:
+                    return "75+"
+                if age >= 70:
+                    return "70-74"
+                if age >= 65:
+                    return "65-69"
+                if age >= 60:
+                    return "60-64"
+                return "60-64"
+            except Exception:
+                return "60-64"
+
+        age_to_store = age_group or _compute_age_group_from_yymmdd(birth_date)
+
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
                     INSERT INTO users (
-                        password_hash, name, birth_date, gender,
+                        password_hash, name, birth_date, gender, age_group,
                         health_conditions, exercise_goals, preferred_location,
                         phone, guardian_phone, address_road, latitude, longitude
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                     RETURNING *
                     """,
                     (
-                        password_hash, name, birth_date, gender,
+                        password_hash, name, birth_date, gender, age_to_store,
                         health_conditions, exercise_goals, preferred_location,
                         phone, guardian_phone, address_road, latitude, longitude
                     )
