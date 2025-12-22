@@ -49,23 +49,24 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final Map<String, dynamic> requestBody = {
         "user_profile": {
-          "age_group": widget.userProfile['age_group'],
-          "health_issues": widget.userProfile['health_issues'] ?? [],
-          "goals": widget.userProfile['goals'] ?? ["체력 증진"],
+          "age_group": widget.userProfile['age_group'] ?? "70-74",
+          "health_issues": List<String>.from(widget.userProfile['health_issues'] ?? []),
+          "goals": List<String>.from(widget.userProfile['goals'] ?? ["건강 증진"]),
           "preference_env": widget.userProfile['preference_env'] ?? "any"
         },
-        "location": {
+        "user_location": {
           "lat": widget.currentLat,
           "lon": widget.currentLon
         },
-        "top_k": 5 
       };
 
       final response = await http.post(
-        Uri.parse(apiUrl),
+        Uri.parse('$backendBaseUrl/api/recommend'),
         headers: {"Content-Type": "application/json; charset=UTF-8"},
         body: jsonEncode(requestBody),
       );
+      print("추천 status = ${response.statusCode}");
+      print("추천 response body = ${utf8.decode(response.bodyBytes)}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -83,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (homeVideos != null && homeVideos.isNotEmpty) {
             _homeExerciseData = homeVideos[0];
           } else {
-            _homeExerciseData = null;
+            throw Exception("서버 오류: ${response.statusCode}");
           }
 
           // 3. 시설 추천 데이터

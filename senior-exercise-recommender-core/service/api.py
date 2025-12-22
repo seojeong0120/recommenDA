@@ -8,16 +8,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-# =========================================================
-# IMPORTS (너희 레포 구조 기준)
-# =========================================================
-from db.user_repository import UserRepository  # ← 네가 올린 코드와 일치 :contentReference[oaicite:1]{index=1}
+from db.user_repository import UserRepository
 
+# 🔹 기존 추천 파이프라인
 from recommender.pipeline import recommend as recommend_facilities
+
+# 🔹 날씨 (추가)
+from service.weather_client import fetch_weather
+from recommender.types import WeatherInfo
+
+# 🔹 LLM 홈트 추천
 from recommender.exercise_recommender import (
     load_exercises,
     choose_exercises_with_llm_for_today,
 )
+
+# 🔹 유틸
+from recommender.utils import is_weather_dangerous
 
 # =========================================================
 # App
@@ -164,36 +171,39 @@ def login(req: LoginRequest):
 # =========================================================
 # Recommendation
 # =========================================================
+
 @app.post("/api/recommend", response_model=RecommendResponse)
 def recommend(req: RecommendRequest):
     user_profile = req.user_profile
     user_location = req.user_location
 
-    # 1️⃣ 시설 추천 + 날씨
-    result = recommend_facilities(user_profile, user_location)
-    facilities = result.get("recommendations", [])
-    weather_info_raw = result.get("weather_info", {})
-
-    weather_info = WeatherInfo(
-        temp=weather_info_raw.get("temp"),
-        rain_prob=weather_info_raw.get("rain_prob"),
-        pm10=weather_info_raw.get("pm10"),
-        is_daytime=weather_info_raw.get("is_daytime"),
+    # ✅ 1️⃣ 날씨 먼저 조회 (핵심!)
+    weather_info: WeatherInfo = fetch_weather(
+        lat=user_location["lat"],
+        lon=user_location["lon"],
     )
 
-    exercise_videos: List[ExerciseVideoResponse] = []
+    # ✅ 2️⃣ 시설 추천 (weather_info 반드시 전달)
+    facilities = recommend_facilities(
+        user_profile=user_profile,
+        user_location=user_location,
+        weather_info=weather_info,
+        top_k=5,
+    )
 
-    # 2️⃣ 날씨 위험 시 → 홈트 추천 (LLM)
-    if is_weather_dangerous(weather_info_raw):
+    exercise_videos: list[ExerciseVideoResponse] = []
+
+    # ✅ 3️⃣ 날씨 위험하면 → LLM 홈트 추천
+    if is_weather_dangerous(weather_info):
         exercises = load_exercises()
         if exercises:
             user_id = f"user_{user_location['lat']}_{user_location['lon']}"
 
             llm_context = {
                 "weather_summary": "위험",
-                "temperature_c": weather_info.temp,
-                "precipitation_prob": weather_info.rain_prob,
-                "time_of_day": "day" if weather_info.is_daytime else "night",
+                "temperature_c": weather_info["temp"],
+                "precipitation_prob": weather_info["rain_prob"],
+                "time_of_day": "day" if weather_info["is_daytime"] else "night",
             }
 
             llm_result = choose_exercises_with_llm_for_today(
@@ -214,7 +224,9 @@ def recommend(req: RecommendRequest):
                         신체부위=ex.get("신체부위", ""),
                         혼자여부=ex.get("혼자여부", ""),
                         url=ex.get("url", ""),
-                        info=f"체력항목: {ex.get('체력항목')} | 도구: {ex.get('운동도구')} | 부위: {ex.get('신체부위')}",
+                        info=f"체력항목: {ex.get('체력항목')} | "
+                             f"도구: {ex.get('운동도구')} | "
+                             f"부위: {ex.get('신체부위')}",
                         reason=ex.get("why"),
                         cautions=ex.get("cautions"),
                         next_step=ex.get("next_step"),
@@ -226,4 +238,3 @@ def recommend(req: RecommendRequest):
         weather_info=weather_info,
         exercise_videos=exercise_videos,
     )
-
