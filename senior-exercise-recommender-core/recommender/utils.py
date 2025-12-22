@@ -1,5 +1,6 @@
 # recommender/utils.py
 import math
+from typing import Any
 
 def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """

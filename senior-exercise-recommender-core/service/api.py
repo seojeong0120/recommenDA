@@ -201,9 +201,9 @@ def recommend(req: RecommendRequest):
 
             llm_context = {
                 "weather_summary": "위험",
-                "temperature_c": weather_info["temp"],
-                "precipitation_prob": weather_info["rain_prob"],
-                "time_of_day": "day" if weather_info["is_daytime"] else "night",
+                "temperature_c": weather_info.temp,
+                "precipitation_prob": weather_info.rain_prob,
+                "time_of_day": "day" if weather_info.is_daytime else "night",
             }
 
             llm_result = choose_exercises_with_llm_for_today(
