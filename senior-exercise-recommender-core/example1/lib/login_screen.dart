@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'signup.dart';
 import 'home_screen.dart';
+import 'config.dart';
+import 'package:flutter/services.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,15 +30,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
+    final normalizedPhone = id.replaceAll(RegExp(r'\D'), '');
+
     // [주의] 서버에 /api/login 엔드포인트가 있어야 작동합니다.
-    const String apiUrl = "http://10.0.2.2:8000/api/login";
+    final String apiUrl = '$backendBaseUrl/api/login';
 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {"Content-Type": "application/json; charset=UTF-8"},
         body: jsonEncode({
-          "phone": id, // 서버가 LoginRequest에서 username 필드를 쓴다면 이렇게 보냄
+          "phone": normalizedPhone, // 서버가 LoginRequest에서 username 필드를 쓴다면 이렇게 보냄
           "password": pw,
         }),
       );
@@ -110,6 +114,8 @@ class _LoginScreenState extends State<LoginScreen> {
               // 아이디 입력
               TextField(
                 controller: _idController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(labelText: "아이디 (전화번호)", prefixIcon: const Icon(Icons.person), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
               const SizedBox(height: 16),

@@ -122,7 +122,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 onChanged: (v) => _checkFormValidity(),
                 style: const TextStyle(fontSize: 22),
                 decoration: InputDecoration(
-                  hintText: "010-0000-0000",
+                  hintText: "전화번호 입력",
                   hintStyle: TextStyle(color: Colors.grey[500], fontSize: 18),
                   filled: true,
                   fillColor: Colors.white,
@@ -200,7 +200,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 onChanged: (v) => _checkFormValidity(),
                 style: const TextStyle(fontSize: 22),
                 decoration: InputDecoration(
-                  hintText: "010-0000-0000",
+                  hintText: "보호자 전화번호 입력",
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),

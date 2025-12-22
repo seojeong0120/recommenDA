@@ -6,15 +6,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_db_connection():
-    # 1순위: DATABASE_URL 환경변수가 있으면 그걸 사용 (지금 님 상황!)
+    # 1순위: DATABASE_URL 환경변수가 있으면 그걸 사용
     database_url = os.getenv("DATABASE_URL")
     
     # 2순위: 없으면 개별 변수 사용 (기존 방식 호환)
     db_host = os.getenv("DB_HOST", "localhost")
     db_name = os.getenv("DB_NAME", "postgres")
     db_user = os.getenv("DB_USER", "postgres")
-    db_password = os.getenv("DB_PASSWORD", "password")
+    db_password = os.getenv("DB_PASSWORD")  # 기본값 제거: 환경 변수 필수
     db_port = os.getenv("DB_PORT", "5432")
+    
+    # DATABASE_URL이 없을 때는 개별 변수 방식 사용
+    # 이 경우 DB_PASSWORD가 필수 (보안상 기본값 사용 안 함)
+    if not database_url and not db_password:
+        raise ValueError(
+            "DATABASE_URL 또는 DB_PASSWORD 환경 변수가 필요합니다.\n"
+            "배포 환경에서는 DATABASE_URL이 자동으로 설정됩니다.\n"
+            "로컬 개발 환경에서는 .env 파일에 DATABASE_URL 또는 DB_PASSWORD를 설정하세요."
+        )
 
     conn = None
     try:
@@ -38,7 +47,7 @@ def get_db_connection():
         return conn
         
     except Exception as e:
-        # ⚠️ 윈도우 한글 에러 메시지 깨짐 방지 처리
+        # 윈도우 한글 에러 메시지 깨짐 방지 처리
         print("🚨 DB 연결 실패!")
         try:
             # 에러 메시지를 CP949(한글 윈도우)로 디코딩 시도하거나 그냥 출력

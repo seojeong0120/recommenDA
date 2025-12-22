@@ -3,7 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter/foundation.dart'; 
+import 'package:flutter/foundation.dart';
+import 'config.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -69,7 +70,7 @@ class NotificationService {
 
   // [API 연동] 서버 날씨/위험 체크 후 알림 발생
   Future<void> checkServerForNotification(String userId, double lat, double lon) async {
-    const String apiUrl = "http://10.0.2.2:8000/api/notification/exercise";
+    String apiUrl = '$backendBaseUrl/api/notification/exercise';
 
     try {
       final response = await http.post(

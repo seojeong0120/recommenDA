@@ -4,6 +4,7 @@ FastAPI 기반 REST API 서버
 Flutter 앱에서 사용할 수 있는 API 엔드포인트 제공
 """
 import sys
+import re
 from datetime import date
 from typing import List, Optional
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from recommender.exercise_recommender import load_exercises, choose_exercises_with_llm_for_today
 
 # 프로젝트 루트를 path에 추가
 project_root = Path(__file__).resolve().parents[1]
@@ -71,6 +73,11 @@ def compute_age_group_from_yymmdd(birth_yymmdd: str) -> str:
         return "60-64"
     except Exception:
         return "60-64"
+def normalize_phone(phone: str) -> str:
+    """
+    전화번호 정규화
+    """
+    return re.sub(r"\D", "", phone)
 
 # ==================== Pydantic 모델 정의 ====================
 
@@ -109,6 +116,9 @@ class ExerciseVideoResponse(BaseModel):
     혼자여부: str
     url: str
     info: str  # 포맷된 정보
+    reason: Optional[List[str]] = None
+    cautions: Optional[List[str]] = None
+    next_step: Optional[str] = None
 
 class RecommendResponse(BaseModel):
     recommendations: List[RecommendationResponse]
@@ -272,26 +282,41 @@ async def get_recommendations(request: RecommendRequest):
                     # 날씨가 위험하면 실내 운동 영상 추천
                     exercises = load_exercises()
                     if exercises:
-                        # 사용자 ID는 임시로 생성 (실제로는 요청에서 받아야 함)
-                        user_id = f"user_{user_location['lat']}_{user_location['lon']}"
-                        exercise = choose_exercise_for_today(
-                            exercises,
-                            user_id=user_id,
-                            today_date=None,
+                        user_id = f"user_{user_location['lat']}_{user_location['lon']}"  # TODO: 실제 user_id로
+                    llm_context = {
+                    "weather_summary": "위험",  # 원하면 weather_text 같은 걸 넣어도 좋음
+                    "temperature_c": weather_info.get("temp"),
+                    "precipitation_prob": weather_info.get("rain_prob"),
+                    "pm25": None,
+                    "time_of_day": "day" if weather_info.get("is_daytime") else "night",
+                    "max_distance_km": 0.0,
+                    }
+                    llm_result = choose_exercises_with_llm_for_today(
+                        exercises=exercises,
+                        user_profile=user_profile,
+                        context=llm_context,
+                        user_id=user_id,
+                        today_date=None,
+                        top_k=8,
+                        top_n=3,
+                    )
+                    exercise_videos = []
+                    for ex in llm_result.get("ranked", []):
+                        exercise_videos.append(
+                            ExerciseVideoResponse(
+                                name=ex.get("Name", ""),
+                                체력항목=ex.get("체력항목", ""),
+                                운동도구=ex.get("운동도구", ""),
+                                신체부위=ex.get("신체부위", ""),
+                                혼자여부=ex.get("혼자여부", ""),
+                                url=ex.get("url", ""),
+                                info=f"체력항목: {ex.get('체력항목', '')} | 도구: {ex.get('운동도구', '')} | 부위: {ex.get('신체부위', '')}",
+                                reason=ex.get("why"),
+                                cautions=ex.get("cautions"),
+                                next_step=ex.get("next_step"),
+                            )
                         )
                         
-                        if exercise:
-                            exercise_videos = [
-                                ExerciseVideoResponse(
-                                    name=exercise.get("Name", ""),
-                                    체력항목=exercise.get("체력항목", ""),
-                                    운동도구=exercise.get("운동도구", ""),
-                                    신체부위=exercise.get("신체부위", ""),
-                                    혼자여부=exercise.get("혼자여부", ""),
-                                    url=exercise.get("url", ""),
-                                    info=f"체력항목: {exercise.get('체력항목', '')} | 도구: {exercise.get('운동도구', '')} | 부위: {exercise.get('신체부위', '')}",
-                                )
-                            ]
         except Exception as e:
             # 날씨 평가 실패해도 추천은 계속 진행
             print(f"날씨 위험 평가 중 오류: {e}")
@@ -322,13 +347,21 @@ async def create_user(request: UserCreateRequest):
         from db.user_repository import UserRepository
         
         repo = UserRepository()
+
+        # 전화번호 정규화
+        normalized_phone = normalize_phone(request.phone)
+        normalized_guardian_phone = (
+            normalize_phone(request.guardian_phone) 
+            if request.guardian_phone
+            else "01000000000"
+        )
         
-        # 전화번호 중복 확인
-        existing_user = repo.get_user_by_phone(request.phone)
+        # 전화번호 중복 확인도 정규화된 값으로
+        existing_user = repo.get_user_by_phone(normalized_phone)
         if existing_user:
             raise HTTPException(
                 status_code=400,
-                detail=f"이미 등록된 전화번호입니다: {request.phone}"
+                detail=f"이미 등록된 전화번호입니다: {normalized_phone}"
             )
         
         # Flutter 앱 데이터를 새 PostgreSQL 스키마로 변환
@@ -356,8 +389,8 @@ async def create_user(request: UserCreateRequest):
             health_conditions=request.health_issues,
             exercise_goals=request.goals,
             preferred_location=preferred_location,
-            phone=request.phone,  # 사용자가 입력한 전화번호 (로그인 ID)
-            guardian_phone=request.guardian_phone or "010-0000-0000",
+            phone=normalized_phone,  # 정규화된 전화번호 (로그인 ID)
+            guardian_phone=normalized_guardian_phone,
             address_road=request.address_road or "주소 미입력",
             latitude=request.home_lat or 37.5665,
             longitude=request.home_lon or 126.9780,
@@ -393,10 +426,16 @@ async def login(request: LoginRequest):
         from db.user_repository import UserRepository
         
         repo = UserRepository()
+
+        normalized_phone = normalize_phone(request.phone)
         
         # 로그인 시도: 먼저 전화번호 존재 여부 확인
         user_record = repo.get_user_by_phone(normalized_phone)
         if not user_record:
+        # 로그인 시도
+        user = repo.login(normalized_phone, request.password)
+        
+        if not user:
             return LoginResponse(
                 success=False,
                 message="등록되지 않은 번호입니다.",

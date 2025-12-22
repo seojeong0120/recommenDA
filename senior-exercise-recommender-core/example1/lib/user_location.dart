@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:kpostal/kpostal.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'home_screen.dart';
+import 'config.dart';
 
 class UserLocationScreen extends StatefulWidget {
   final String userId; // 사용자가 입력한 아이디
@@ -137,8 +138,8 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
 
   // 회원가입 API 호출 (서버의 UserCreateRequest 스펙에 맞춤)
   Future<void> _registerAndGoHome() async {
-    const String apiUrl = "http://10.0.2.2:8000/api/user"; 
-    
+    final String apiUrl = '$backendBaseUrl/api/user';
+
     setState(() => _isLoading = true);
 
     try {
