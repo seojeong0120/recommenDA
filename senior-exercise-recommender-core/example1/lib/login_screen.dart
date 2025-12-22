@@ -42,15 +42,24 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.statusCode == 200) {
-        // 로그인 성공!
+        // 로그인 응답 처리
         final responseData = jsonDecode(utf8.decode(response.bodyBytes));
-        
+
         print("===== 로그인 응답 데이터 =====");
         print("전체 응답: $responseData");
-        
-        // user 필드에서 실제 사용자 데이터 추출
+
+        final success = responseData['success'] == true;
+        final message = responseData['message'] as String? ?? '로그인 실패';
+
+        if (!success) {
+          // 실패 시 서버가 준 메시지를 표시
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+          return;
+        }
+
+        // 로그인 성공
         final userData = responseData['user'] ?? responseData;
-        
         print("추출한 userData: $userData");
         print("home_lat: ${userData['home_lat']}");
         print("home_lon: ${userData['home_lon']}");
@@ -58,9 +67,9 @@ class _LoginScreenState extends State<LoginScreen> {
         print("health_issues: ${userData['health_issues']}");
         print("goals: ${userData['goals']}");
         print("===============================");
-        
+
         if (!mounted) return;
-        
+
         // 홈 화면으로 이동 (서버에서 받은 사용자 정보 전달)
         Navigator.pushReplacement(
           context,

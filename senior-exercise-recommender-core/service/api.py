@@ -40,6 +40,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def compute_age_group_from_yymmdd(birth_yymmdd: str) -> str:
+    """Convert a birth date in yymmdd format to an age group string.
+
+    Returns one of: '60-64', '65-69', '70-74', '75+'. If parsing fails,
+    returns '60-64' as a safe default.
+    """
+    try:
+        s = (birth_yymmdd or '').strip()
+        if len(s) != 6 or not s.isdigit():
+            return "60-64"
+        yy = int(s[0:2])
+        # Determine century using current year
+        current_year = date.today().year
+        current_yy = current_year % 100
+        if yy <= current_yy:
+            birth_year = 2000 + yy
+        else:
+            birth_year = 1900 + yy
+        age = current_year - birth_year
+        if age >= 75:
+            return "75+"
+        if age >= 70:
+            return "70-74"
+        if age >= 65:
+            return "65-69"
+        if age >= 60:
+            return "60-64"
+        return "60-64"
+    except Exception:
+        return "60-64"
+
 # ==================== Pydantic 모델 정의 ====================
 
 class UserProfileRequest(BaseModel):
@@ -313,11 +345,14 @@ async def create_user(request: UserCreateRequest):
         default_birth_date = "500101"  # 임시 생년월일
         
         # 회원가입
+        birth_to_store = request.birth_date or default_birth_date
+        computed_age_group = compute_age_group_from_yymmdd(birth_to_store)
         user = repo.create_user(
             password=request.password,  # 사용자가 입력한 비밀번호
             name=request.nickname,
-            birth_date=request.birth_date or default_birth_date,
+            birth_date=birth_to_store,
             gender=request.gender or "미지정",
+            age_group=computed_age_group,
             health_conditions=request.health_issues,
             exercise_goals=request.goals,
             preferred_location=preferred_location,
@@ -331,11 +366,10 @@ async def create_user(request: UserCreateRequest):
         # 비밀번호 해시 제거 후 반환
         user.pop('password_hash', None)
         
-        # UserResponse 형식으로 변환 (기존 호환성 유지)
         return UserResponse(
             id=user['id'],
             nickname=user['name'],
-            age_group=request.age_group,  # 원본 유지
+            age_group=computed_age_group,
             health_issues=user['health_conditions'],
             goals=user['exercise_goals'],
             preference_env=request.preference_env,  # 원본 유지
@@ -360,15 +394,26 @@ async def login(request: LoginRequest):
         
         repo = UserRepository()
         
-        # 로그인 시도
-        user = repo.login(request.phone, request.password)
-        
-        if not user:
+        # 로그인 시도: 먼저 전화번호 존재 여부 확인
+        user_record = repo.get_user_by_phone(normalized_phone)
+        if not user_record:
             return LoginResponse(
                 success=False,
-                message="전화번호 또는 비밀번호가 올바르지 않습니다.",
+                message="등록되지 않은 번호입니다.",
                 user=None
             )
+
+        # 비밀번호 검증
+        if not repo.verify_password(request.password, user_record.get('password_hash', '')):
+            return LoginResponse(
+                success=False,
+                message="비밀번호를 확인해주세요.",
+                user=None
+            )
+
+        # 로그인 성공: user_record에서 패스워드 해시 제거
+        user = dict(user_record)
+        user.pop('password_hash', None)
         
         # preference_env 변환 (한글 -> 영어)
         preference_map = {
@@ -378,9 +423,8 @@ async def login(request: LoginRequest):
         }
         preference_env = preference_map.get(user.get('preferred_location', '둘 다'), "any")
         
-        # birth_date에서 age_group 추정 (간단한 버전)
-        # 실제로는 정확한 계산이 필요하지만, 여기서는 임시로 처리
-        age_group = "60-64"  # 임시값, 나중에 birth_date에서 계산 필요
+        # birth_date에서 age_group 추정
+        age_group = compute_age_group_from_yymmdd(user.get('birth_date', ''))
         
         # UserResponse 형식으로 변환
         user_response = UserResponse(
@@ -472,10 +516,11 @@ async def get_user(user_id: int):
                 user = dict(result)
                 
                 # UserResponse 형식으로 변환
+                computed_age_group = compute_age_group_from_yymmdd(user.get('birth_date', ''))
                 return UserResponse(
                     id=user['id'],
                     nickname=user['name'],
-                    age_group="60-64",  # 임시 (birth_date에서 계산 필요)
+                    age_group=computed_age_group,
                     health_issues=user['health_conditions'],
                     goals=user['exercise_goals'],
                     preference_env=user['preferred_location'],  # 한글 -> 영어 변환 필요
