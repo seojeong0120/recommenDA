@@ -136,35 +136,33 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
     return "any";
   }
 
-  // 회원가입 API 호출 (서버의 UserCreateRequest 스펙에 맞춤)
   Future<void> _registerAndGoHome() async {
-    final String apiUrl = '$backendBaseUrl/api/user';
+    final String apiUrl = '$backendBaseUrl/api/signup';
 
     setState(() => _isLoading = true);
 
     try {
+      // 백엔드 SignUpRequest 스펙에 정확히 맞춘 body
       final Map<String, dynamic> requestBody = {
-        // [핵심] api.py는 'phone' 필드를 ID로 사용함. 입력받은 userId를 phone에 넣어서 보냄.
-        "phone": widget.userId,  
+        "phone": widget.userId,                 // 아이디 → phone
         "password": widget.password,
-        "nickname": widget.name,
-        "age_group": _calculateAgeGroup(widget.birthdate),
+        "name": widget.name,
         "birth_date": widget.birthdate,
         "gender": widget.gender,
-        "health_issues": widget.healthIssues,
-        "goals": widget.goals,
-        "preference_env": _mapPreferenceToApi(widget.preference),
+        "health_conditions": widget.healthIssues,
+        "exercise_goals": widget.goals,
+        "preferred_location": _mapPreferenceToApi(widget.preference),
         "guardian_phone": widget.guardianPhone,
-        "address_road": _addressRoad ?? _address, // 도로명 주소 전송
-        "home_lat": _lat ?? 37.5665,
-        "home_lon": _lon ?? 126.9780,
+        "address_road": _addressRoad ?? _address,
+        "latitude": _lat ?? 37.5665,
+        "longitude": _lon ?? 126.9780,
       };
 
+      print("회원가입 요청 URL: $apiUrl");
       print("보내는 데이터: $requestBody");
 
       final response = await http.post(
         Uri.parse(apiUrl),
-        // 한글 깨짐 방지 표준 헤더
         headers: {
           "Content-Type": "application/json; charset=UTF-8",
         },
@@ -172,10 +170,16 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
       );
 
       if (response.statusCode == 200) {
-        final userData = jsonDecode(utf8.decode(response.bodyBytes));
-        
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+        if (data["success"] != true) {
+          throw Exception(data["message"] ?? "회원가입 실패");
+        }
+
+        final userData = data["user"];
+
         if (!mounted) return;
-        
+
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -195,25 +199,25 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
                         currentLon: _lon ?? 126.9780,
                       ),
                     ),
-                    (route) => false,
+                        (route) => false,
                   );
                 },
-                child: const Text("시작하기", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                child: const Text(
+                  "시작하기",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
               ),
             ],
           ),
         );
       } else {
-        // 에러 메시지도 디코딩 시도
-        String errorDetail = response.body;
-        try {
-           errorDetail = utf8.decode(response.bodyBytes);
-        } catch (_) {}
+        String errorDetail = utf8.decode(response.bodyBytes);
         throw Exception("서버 에러 (${response.statusCode}): $errorDetail");
       }
     } catch (e) {
       print("가입 에러: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류: $e")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("오류: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
