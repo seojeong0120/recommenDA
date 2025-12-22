@@ -1,112 +1,97 @@
 # service/api.py
-"""
-FastAPI 기반 REST API 서버
-Flutter 앱에서 사용할 수 있는 API 엔드포인트 제공
-"""
-import sys
+from __future__ import annotations
+
 import re
-from datetime import date
-from typing import List, Optional
-from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from dotenv import load_dotenv
-from recommender.exercise_recommender import load_exercises, choose_exercises_with_llm_for_today
+from pydantic import BaseModel, Field
 
-# 프로젝트 루트를 path에 추가
-project_root = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(project_root))
+# =========================================================
+# IMPORTS (너희 레포 구조 기준)
+# =========================================================
+from db.user_repository import UserRepository  # ← 네가 올린 코드와 일치 :contentReference[oaicite:1]{index=1}
 
-# .env 파일 로드
-load_dotenv(project_root / '.env')
-
-# 데이터베이스 초기화
-from db.database import init_database
-init_database()
-
-# FastAPI 앱 생성
-app = FastAPI(
-    title="시니어 운동 추천 API",
-    description="시니어를 위한 운동 추천 및 커뮤니티 서비스 API",
-    version="1.0.0"
+from recommender.pipeline import recommend as recommend_facilities
+from recommender.exercise_recommender import (
+    load_exercises,
+    choose_exercises_with_llm_for_today,
 )
 
-# CORS 설정 (Flutter 앱에서 접근 가능하도록)
+# =========================================================
+# App
+# =========================================================
+app = FastAPI(title="Senior Exercise Recommendation API")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프로덕션에서는 특정 도메인으로 제한
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-def compute_age_group_from_yymmdd(birth_yymmdd: str) -> str:
-    """Convert a birth date in yymmdd format to an age group string.
-
-    Returns one of: '60-64', '65-69', '70-74', '75+'. If parsing fails,
-    returns '60-64' as a safe default.
-    """
-    try:
-        s = (birth_yymmdd or '').strip()
-        if len(s) != 6 or not s.isdigit():
-            return "60-64"
-        yy = int(s[0:2])
-        # Determine century using current year
-        current_year = date.today().year
-        current_yy = current_year % 100
-        if yy <= current_yy:
-            birth_year = 2000 + yy
-        else:
-            birth_year = 1900 + yy
-        age = current_year - birth_year
-        if age >= 75:
-            return "75+"
-        if age >= 70:
-            return "70-74"
-        if age >= 65:
-            return "65-69"
-        if age >= 60:
-            return "60-64"
-        return "60-64"
-    except Exception:
-        return "60-64"
+# =========================================================
+# Utils
+# =========================================================
 def normalize_phone(phone: str) -> str:
-    """
-    전화번호 정규화
-    """
-    return re.sub(r"\D", "", phone)
+    digits = re.sub(r"[^0-9]", "", phone or "")
+    if digits.startswith("82"):
+        digits = "0" + digits[2:]
+    return digits
 
-# ==================== Pydantic 모델 정의 ====================
 
-class UserProfileRequest(BaseModel):
-    age_group: str  # "60-64", "65-69", "70-74", "75+"
-    health_issues: List[str]
-    goals: List[str]
-    preference_env: str  # "indoor", "outdoor", "any"
+def is_weather_dangerous(weather_info: Dict[str, Any]) -> bool:
+    """간단한 위험 판단 (필요 시 고도화 가능)"""
+    if weather_info.get("rain_prob", 0) >= 70:
+        return True
+    if weather_info.get("pm10", 0) >= 80:
+        return True
+    return False
 
-class LocationRequest(BaseModel):
-    lat: float
-    lon: float
+
+# =========================================================
+# Schemas
+# =========================================================
+class SignUpRequest(BaseModel):
+    phone: str
+    password: str
+    name: str
+    birth_date: str
+    gender: str
+    health_conditions: List[str]
+    exercise_goals: List[str]
+    preferred_location: str
+    guardian_phone: str
+    address_road: str
+    latitude: float
+    longitude: float
+
+
+class LoginRequest(BaseModel):
+    phone: str
+    password: str
+
+
+class UserPublic(BaseModel):
+    phone: str
+    name: str
+    gender: str
+    age_group: str
+
 
 class RecommendRequest(BaseModel):
-    user_profile: UserProfileRequest
-    location: LocationRequest
-    top_k: Optional[int] = 5
+    user_profile: Dict[str, Any]
+    user_location: Dict[str, float]
 
-class RecommendationResponse(BaseModel):
-    fac_id: str
-    facility_name: str
-    program_name: str
-    sport_category: str
-    distance_km: float
-    intensity_level: str
-    is_indoor: bool
-    reason: str
-    lat: float
-    lon: float
+
+class WeatherInfo(BaseModel):
+    temp: Optional[float]
+    rain_prob: Optional[float]
+    pm10: Optional[float]
+    is_daytime: Optional[bool]
+
 
 class ExerciseVideoResponse(BaseModel):
     name: str
@@ -115,661 +100,130 @@ class ExerciseVideoResponse(BaseModel):
     신체부위: str
     혼자여부: str
     url: str
-    info: str  # 포맷된 정보
+    info: str
     reason: Optional[List[str]] = None
     cautions: Optional[List[str]] = None
     next_step: Optional[str] = None
 
+
 class RecommendResponse(BaseModel):
-    recommendations: List[RecommendationResponse]
-    weather_info: dict
-    exercise_videos: Optional[List[ExerciseVideoResponse]] = None  # 날씨 위험 시 추천되는 실내 운동 영상
+    recommendations: List[Dict[str, Any]]
+    weather_info: WeatherInfo
+    exercise_videos: List[ExerciseVideoResponse]
 
-class UserCreateRequest(BaseModel):
-    phone: str  # 로그인 ID (전화번호)
-    password: str  # 비밀번호
-    nickname: str
-    age_group: str
-    health_issues: List[str]
-    goals: List[str]
-    preference_env: str = "any"
-    home_lat: Optional[float] = None
-    home_lon: Optional[float] = None
-    guardian_phone: Optional[str] = None
-    address_road: Optional[str] = None
-    birth_date: Optional[str] = None
-    gender: Optional[str] = None
 
-class UserResponse(BaseModel):
-    id: int
-    nickname: str
-    age_group: str
-    health_issues: List[str]
-    goals: List[str]
-    preference_env: str
-    home_lat: Optional[float]
-    home_lon: Optional[float]
+# =========================================================
+# Health
+# =========================================================
+@app.get("/health")
+def health():
+    return {"ok": True}
 
-class LoginRequest(BaseModel):
-    phone: str  # 로그인 ID (전화번호)
-    password: str  # 비밀번호
 
-class LoginResponse(BaseModel):
-    success: bool
-    message: str
-    user: Optional[UserResponse] = None
+# =========================================================
+# Auth
+# =========================================================
+@app.post("/api/signup")
+def signup(req: SignUpRequest):
+    repo = UserRepository()
+    phone = normalize_phone(req.phone)
 
-class JoinSessionRequest(BaseModel):
-    user_id: int
-    fac_id: str
-    program_name: str
-    session_date: str  # YYYY-MM-DD
-    time_block: str  # "오전", "오후", "저녁"
-    fac_name: str
-    max_participants: int = 4
+    if repo.get_user_by_phone(phone):
+        return {"success": False, "message": "이미 가입된 번호입니다."}
 
-class JoinSessionResponse(BaseModel):
-    status: str
-    current_participants: int
-    max_participants: int
-    session_filled: bool
-    session_id: Optional[int] = None
-    message: Optional[str] = None
+    user = repo.create_user(
+        phone=phone,
+        password=req.password,
+        name=req.name,
+        birth_date=req.birth_date,
+        gender=req.gender,
+        health_conditions=req.health_conditions,
+        exercise_goals=req.exercise_goals,
+        preferred_location=req.preferred_location,
+        guardian_phone=req.guardian_phone,
+        address_road=req.address_road,
+        latitude=req.latitude,
+        longitude=req.longitude,
+    )
 
-class ParticipantResponse(BaseModel):
-    id: int
-    nickname: str
+    return {"success": True, "user": user}
 
-class SessionParticipantsResponse(BaseModel):
-    participants: List[ParticipantResponse]
 
-class GroupExerciseVideosRequest(BaseModel):
-    user_profile: Optional[UserProfileRequest] = None
-    program_name: Optional[str] = None
-    max_results: int = 5
+@app.post("/api/login")
+def login(req: LoginRequest):
+    repo = UserRepository()
+    phone = normalize_phone(req.phone)
 
-class GroupExerciseVideosResponse(BaseModel):
-    videos: List[ExerciseVideoResponse]
+    user = repo.login(phone, req.password)
+    if not user:
+        return {"success": False, "message": "전화번호 또는 비밀번호가 올바르지 않습니다."}
 
-class NotificationRequest(BaseModel):
-    user_id: str
-    lat: Optional[float] = None  # 위치 정보 (기상청 API용)
-    lon: Optional[float] = None
-    has_chronic_disease: bool = False
-    air_quality_risky: bool = False
+    return {"success": True, "user": user}
 
-class NotificationResponse(BaseModel):
-    has_notification: bool
-    message: Optional[str] = None
-    exercise: Optional[ExerciseVideoResponse] = None
-    weather_info: Optional[dict] = None
 
-# ==================== API 엔드포인트 ====================
-
-@app.get("/")
-async def root():
-    """API 상태 확인"""
-    return {
-        "status": "ok",
-        "message": "시니어 운동 추천 API 서버가 실행 중입니다.",
-        "version": "1.0.0"
-    }
-
-@app.get("/api/health")
-async def health_check():
-    """헬스 체크"""
-    return {"status": "healthy"}
-
+# =========================================================
+# Recommendation
+# =========================================================
 @app.post("/api/recommend", response_model=RecommendResponse)
-async def get_recommendations(request: RecommendRequest):
-    """
-    날씨 기반 운동 추천
-    
-    사용자 프로필과 위치를 기반으로 날씨 정보를 조회하고
-    운동/시설을 추천합니다.
-    """
-    try:
-        from recommender.types import UserProfile, Location, WeatherInfo
-        from recommender.pipeline import recommend
-        from service.weather_client import fetch_weather
-        
-        # 타입 변환
-        user_profile: UserProfile = {
-            "age_group": request.user_profile.age_group,
-            "health_issues": request.user_profile.health_issues,
-            "goals": request.user_profile.goals,
-            "preference_env": request.user_profile.preference_env,
-        }
-        
-        user_location: Location = {
-            "lat": request.location.lat,
-            "lon": request.location.lon,
-        }
-        
-        # 날씨 정보 조회
-        weather_info = fetch_weather(user_location["lat"], user_location["lon"])
-        
-        # 추천 생성
-        recommendations = recommend(
-            user_profile=user_profile,
-            user_location=user_location,
-            weather_info=weather_info,
-            top_k=request.top_k,
-        )
-        
-        # 응답 변환
-        recommendation_responses = [
-            RecommendationResponse(**rec) for rec in recommendations
-        ]
-        
-        # 날씨가 위험하면 실내 운동 영상 추천
-        exercise_videos = None
-        from service.weather_client import fetch_kma_ultra_nowcast, evaluate_weather_danger
-        from recommender.exercise_recommender import load_exercises, choose_exercise_for_today
-        
-        try:
-            weather_raw = fetch_kma_ultra_nowcast(user_location["lat"], user_location["lon"])
-            if weather_raw:
-                # 미세먼지가 높은지 확인 (PM10 > 80)
-                is_air_quality_risky = weather_info["pm10"] > 80
-                is_dangerous, _ = evaluate_weather_danger(
-                    weather_raw,
-                    has_chronic_disease=len(user_profile.get("health_issues", [])) > 0,
-                    air_quality_risky=is_air_quality_risky,
-                )
-                
-                if is_dangerous:
-                    # 날씨가 위험하면 실내 운동 영상 추천
-                    exercises = load_exercises()
-                    if exercises:
-                        user_id = f"user_{user_location['lat']}_{user_location['lon']}"  # TODO: 실제 user_id로
-                    llm_context = {
-                    "weather_summary": "위험",  # 원하면 weather_text 같은 걸 넣어도 좋음
-                    "temperature_c": weather_info.get("temp"),
-                    "precipitation_prob": weather_info.get("rain_prob"),
-                    "pm25": None,
-                    "time_of_day": "day" if weather_info.get("is_daytime") else "night",
-                    "max_distance_km": 0.0,
-                    }
-                    llm_result = choose_exercises_with_llm_for_today(
-                        exercises=exercises,
-                        user_profile=user_profile,
-                        context=llm_context,
-                        user_id=user_id,
-                        today_date=None,
-                        top_k=8,
-                        top_n=3,
-                    )
-                    exercise_videos = []
-                    for ex in llm_result.get("ranked", []):
-                        exercise_videos.append(
-                            ExerciseVideoResponse(
-                                name=ex.get("Name", ""),
-                                체력항목=ex.get("체력항목", ""),
-                                운동도구=ex.get("운동도구", ""),
-                                신체부위=ex.get("신체부위", ""),
-                                혼자여부=ex.get("혼자여부", ""),
-                                url=ex.get("url", ""),
-                                info=f"체력항목: {ex.get('체력항목', '')} | 도구: {ex.get('운동도구', '')} | 부위: {ex.get('신체부위', '')}",
-                                reason=ex.get("why"),
-                                cautions=ex.get("cautions"),
-                                next_step=ex.get("next_step"),
-                            )
-                        )
-                        
-        except Exception as e:
-            # 날씨 평가 실패해도 추천은 계속 진행
-            print(f"날씨 위험 평가 중 오류: {e}")
-        
-        return RecommendResponse(
-            recommendations=recommendation_responses,
-            weather_info={
-                "temp": weather_info["temp"],
-                "rain_prob": weather_info["rain_prob"],
-                "pm10": weather_info["pm10"],
-                "is_daytime": weather_info["is_daytime"],
-            },
-            exercise_videos=exercise_videos,
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"추천 생성 중 오류 발생: {str(e)}")
+def recommend(req: RecommendRequest):
+    user_profile = req.user_profile
+    user_location = req.user_location
 
-@app.post("/api/user", response_model=UserResponse)
-async def create_user(request: UserCreateRequest):
-    """
-    사용자 생성 (Flutter 앱 호환용)
-    
-    주의: Flutter 앱이 보내지 않는 필드들은 임시 기본값을 사용합니다.
-    나중에 Flutter 앱을 수정하여 모든 필드를 전송하도록 권장합니다.
-    """
-    try:
-        from db.user_repository import UserRepository
-        
-        repo = UserRepository()
+    # 1️⃣ 시설 추천 + 날씨
+    result = recommend_facilities(user_profile, user_location)
+    facilities = result.get("recommendations", [])
+    weather_info_raw = result.get("weather_info", {})
 
-        # 전화번호 정규화
-        normalized_phone = normalize_phone(request.phone)
-        normalized_guardian_phone = (
-            normalize_phone(request.guardian_phone) 
-            if request.guardian_phone
-            else "01000000000"
-        )
-        
-        # 전화번호 중복 확인도 정규화된 값으로
-        existing_user = repo.get_user_by_phone(normalized_phone)
-        if existing_user:
-            raise HTTPException(
-                status_code=400,
-                detail=f"이미 등록된 전화번호입니다: {normalized_phone}"
-            )
-        
-        # Flutter 앱 데이터를 새 PostgreSQL 스키마로 변환
-        # preference_env 변환: "indoor" -> "실내", "outdoor" -> "실외", "any" -> "둘 다"
-        preference_map = {
-            "indoor": "실내",
-            "outdoor": "실외",
-            "any": "둘 다"
-        }
-        preferred_location = preference_map.get(request.preference_env, "둘 다")
-        
-        # age_group에서 birth_date 추정 불가능하므로 임시값 사용
-        # Flutter 앱에서 birth_date를 직접 전송하도록 수정 필요
-        default_birth_date = "500101"  # 임시 생년월일
-        
-        # 회원가입
-        birth_to_store = request.birth_date or default_birth_date
-        computed_age_group = compute_age_group_from_yymmdd(birth_to_store)
-        user = repo.create_user(
-            password=request.password,  # 사용자가 입력한 비밀번호
-            name=request.nickname,
-            birth_date=birth_to_store,
-            gender=request.gender or "미지정",
-            age_group=computed_age_group,
-            health_conditions=request.health_issues,
-            exercise_goals=request.goals,
-            preferred_location=preferred_location,
-            phone=normalized_phone,  # 정규화된 전화번호 (로그인 ID)
-            guardian_phone=normalized_guardian_phone,
-            address_road=request.address_road or "주소 미입력",
-            latitude=request.home_lat or 37.5665,
-            longitude=request.home_lon or 126.9780,
-        )
-        
-        # 비밀번호 해시 제거 후 반환
-        user.pop('password_hash', None)
-        
-        return UserResponse(
-            id=user['id'],
-            nickname=user['name'],
-            age_group=computed_age_group,
-            health_issues=user['health_conditions'],
-            goals=user['exercise_goals'],
-            preference_env=request.preference_env,  # 원본 유지
-            home_lat=float(user['latitude']),
-            home_lon=float(user['longitude']),
-        )
-        
-    except HTTPException:
-        raise # 400 오류는 그대로 전달
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"사용자 생성 중 오류 발생: {str(e)}")
+    weather_info = WeatherInfo(
+        temp=weather_info_raw.get("temp"),
+        rain_prob=weather_info_raw.get("rain_prob"),
+        pm10=weather_info_raw.get("pm10"),
+        is_daytime=weather_info_raw.get("is_daytime"),
+    )
 
-@app.post("/api/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
-    """
-    로그인 (전화번호 + 비밀번호)
-    
-    전화번호를 ID로 사용하여 로그인합니다.
-    """
-    try:
-        from db.user_repository import UserRepository
-        
-        repo = UserRepository()
+    exercise_videos: List[ExerciseVideoResponse] = []
 
-        normalized_phone = normalize_phone(request.phone)
-        
-        # 로그인 시도: 먼저 전화번호 존재 여부 확인
-        user_record = repo.get_user_by_phone(normalized_phone)
-        if not user_record:
-        # 로그인 시도
-        user = repo.login(normalized_phone, request.password)
-        
-        if not user:
-            return LoginResponse(
-                success=False,
-                message="등록되지 않은 번호입니다.",
-                user=None
-            )
-
-        # 비밀번호 검증
-        if not repo.verify_password(request.password, user_record.get('password_hash', '')):
-            return LoginResponse(
-                success=False,
-                message="비밀번호를 확인해주세요.",
-                user=None
-            )
-
-        # 로그인 성공: user_record에서 패스워드 해시 제거
-        user = dict(user_record)
-        user.pop('password_hash', None)
-        
-        # preference_env 변환 (한글 -> 영어)
-        preference_map = {
-            "실내": "indoor",
-            "실외": "outdoor",
-            "둘 다": "any"
-        }
-        preference_env = preference_map.get(user.get('preferred_location', '둘 다'), "any")
-        
-        # birth_date에서 age_group 추정
-        age_group = compute_age_group_from_yymmdd(user.get('birth_date', ''))
-        
-        # UserResponse 형식으로 변환
-        user_response = UserResponse(
-            id=user['id'],
-            nickname=user['name'],
-            age_group=age_group,  # 임시값
-            health_issues=user.get('health_conditions', []),
-            goals=user.get('exercise_goals', []),
-            preference_env=preference_env,
-            home_lat=float(user.get('latitude', 37.5665)),
-            home_lon=float(user.get('longitude', 126.9780)),
-        )
-        
-        return LoginResponse(
-            success=True,
-            message="로그인 성공",
-            user=user_response
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"로그인 중 오류 발생: {str(e)}")
-
-@app.get("/api/users", response_model=List[dict])
-async def get_all_users():
-    """모든 사용자 정보 조회 (개발/테스트용)"""
-    try:
-        from db.user_repository import UserRepository
-        from psycopg2.extras import RealDictCursor
-        
-        repo = UserRepository()
-        
-        # 모든 사용자 조회
-        with repo._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        id, name, birth_date, gender,
-                        health_conditions, exercise_goals, preferred_location,
-                        phone, guardian_phone, address_road,
-                        latitude, longitude, created_at
-                    FROM users
-                    ORDER BY created_at DESC
-                """)
-                results = cur.fetchall()
-                users = []
-                for row in results:
-                    user_dict = dict(row)
-                    # created_at을 문자열로 변환
-                    if user_dict.get('created_at'):
-                        user_dict['created_at'] = str(user_dict['created_at'])
-                    users.append(user_dict)
-                return users
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"사용자 조회 중 오류 발생: {str(e)}"
-        )
-
-@app.get("/api/user/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int):
-    """사용자 정보 조회 (ID로)"""
-    try:
-        from db.user_repository import UserRepository
-        from psycopg2.extras import RealDictCursor
-        
-        repo = UserRepository()
-        
-        # ID로 조회
-        with repo._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        id, name, birth_date, gender,
-                        health_conditions, exercise_goals, preferred_location,
-                        phone, guardian_phone, address_road,
-                        latitude, longitude
-                    FROM users
-                    WHERE id = %s
-                """, (user_id,))
-                result = cur.fetchone()
-                
-                if not result:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="사용자를 찾을 수 없습니다."
-                    )
-                
-                user = dict(result)
-                
-                # UserResponse 형식으로 변환
-                computed_age_group = compute_age_group_from_yymmdd(user.get('birth_date', ''))
-                return UserResponse(
-                    id=user['id'],
-                    nickname=user['name'],
-                    age_group=computed_age_group,
-                    health_issues=user['health_conditions'],
-                    goals=user['exercise_goals'],
-                    preference_env=user['preferred_location'],  # 한글 -> 영어 변환 필요
-                    home_lat=float(user['latitude']),
-                    home_lon=float(user['longitude']),
-                )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"사용자 조회 중 오류 발생: {str(e)}"
-        )
-
-@app.post("/api/community/join", response_model=JoinSessionResponse)
-async def join_community_session(request: JoinSessionRequest):
-    """
-    커뮤니티 세션 참여
-    
-    사용자가 그룹 운동 세션에 참여합니다.
-    """
-    try:
-        from service.community_client import join_session
-        
-        # 날짜 문자열을 date 객체로 변환
-        session_date = date.fromisoformat(request.session_date)
-        
-        result = join_session(
-            user_id=request.user_id,
-            fac_id=request.fac_id,
-            program_name=request.program_name,
-            session_date=session_date,
-            time_block=request.time_block,
-            fac_name=request.fac_name,
-            max_participants=request.max_participants,
-        )
-        
-        return JoinSessionResponse(**result)
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"잘못된 요청: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"세션 참여 중 오류 발생: {str(e)}")
-
-@app.get("/api/community/session/{session_id}/participants", response_model=SessionParticipantsResponse)
-async def get_session_participants(session_id: int):
-    """세션 참여자 목록 조회"""
-    try:
-        from service.community_client import get_session_participants
-        
-        participants = get_session_participants(session_id)
-        
-        participant_responses = [
-            ParticipantResponse(**p) for p in participants
-        ]
-        
-        return SessionParticipantsResponse(participants=participant_responses)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"참여자 조회 중 오류 발생: {str(e)}")
-
-@app.post("/api/exercise-videos/group", response_model=GroupExerciseVideosResponse)
-async def get_group_exercise_videos(request: GroupExerciseVideosRequest):
-    """
-    함께 할 수 있는 운동 영상 추천
-    
-    커뮤니티 운동이 성사되었을 때 함께 할 수 있는 운동 영상을 추천합니다.
-    """
-    try:
-        from service.group_exercise_video_client import (
-            recommend_group_exercise_videos,
-            format_video_info,
-        )
-        from recommender.types import UserProfile
-        
-        # UserProfile 변환
-        user_profile = None
-        if request.user_profile:
-            user_profile: UserProfile = {
-                "age_group": request.user_profile.age_group,
-                "health_issues": request.user_profile.health_issues,
-                "goals": request.user_profile.goals,
-                "preference_env": request.user_profile.preference_env,
-            }
-        
-        # 운동 영상 추천
-        videos = recommend_group_exercise_videos(
-            user_profile=user_profile,
-            program_name=request.program_name,
-            max_results=request.max_results,
-        )
-        
-        # 응답 변환
-        video_responses = []
-        for video in videos:
-            video_responses.append(ExerciseVideoResponse(
-                name=video.get("Name", ""),
-                체력항목=video.get("체력항목", ""),
-                운동도구=video.get("운동도구", ""),
-                신체부위=video.get("신체부위", ""),
-                혼자여부=video.get("혼자여부", ""),
-                url=video.get("url", ""),
-                info=format_video_info(video),
-            ))
-        
-        return GroupExerciseVideosResponse(videos=video_responses)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"운동 영상 추천 중 오류 발생: {str(e)}")
-
-@app.post("/api/notification/exercise", response_model=NotificationResponse)
-async def get_exercise_notification(request: NotificationRequest):
-    """
-    날씨 기반 운동 알림
-    
-    날씨가 위험할 때 실내 운동 영상을 추천하는 알림을 생성합니다.
-    - 날씨 조회 → 위험 평가 → 위험하면 운동 영상 추천 → 알림 메시지 생성
-    """
-    try:
-        from recommender.exercise_recommender import load_exercises, choose_exercise_for_today
-        
-        # 날씨 조회 및 위험 평가
-        try:
-            from service.weather_client import evaluate_weather_danger, fetch_kma_ultra_nowcast
-            
-            # 위치 정보 사용 (요청에 있으면 사용, 없으면 서울 기본값)
-            lat = request.lat if request.lat is not None else 37.5665
-            lon = request.lon if request.lon is not None else 126.9780
-            
-            weather = fetch_kma_ultra_nowcast(lat, lon)
-            if not weather:
-                # 날씨 조회 실패 시 알림 없음
-                return NotificationResponse(
-                    has_notification=False,
-                    message=None,
-                    exercise=None,
-                    weather_info=None,
-                )
-            
-            is_dangerous, weather_text = evaluate_weather_danger(
-                weather,
-                has_chronic_disease=request.has_chronic_disease,
-                air_quality_risky=request.air_quality_risky,
-            )
-        except Exception as e:
-            # 기상청 API 실패 시 알림 없음
-            return NotificationResponse(
-                has_notification=False,
-                message=None,
-                exercise=None,
-                weather_info=None,
-            )
-        
-        if not is_dangerous:
-            # 위험하지 않으면 알림 없음
-            return NotificationResponse(
-                has_notification=False,
-                message=None,
-                exercise=None,
-                weather_info={"status": "safe", "text": weather_text},
-            )
-        
-        # 위험하면 운동 영상 추천
+    # 2️⃣ 날씨 위험 시 → 홈트 추천 (LLM)
+    if is_weather_dangerous(weather_info_raw):
         exercises = load_exercises()
-        if not exercises:
-            return NotificationResponse(
-                has_notification=False,
-                message=None,
-                exercise=None,
-                weather_info={"status": "dangerous", "text": weather_text},
-            )
-        
-        exercise = choose_exercise_for_today(
-            exercises,
-            user_id=request.user_id,
-            today_date=None,  # 오늘 날짜 사용
-        )
-        
-        # 알림 메시지 생성
-        url = exercise.get("url", "")
-        name = exercise.get("Name", "운동")
-        message = (
-            f"오늘은 {weather_text}입니다. "
-            f"밖에 나가지 말고 집 안에서 운동하는 것이 좋겠어요. "
-            f"{url} 이 운동({name})을 하는 것을 추천드릴게요."
-        )
-        
-        # 응답 변환
-        exercise_response = ExerciseVideoResponse(
-            name=exercise.get("Name", ""),
-            체력항목=exercise.get("체력항목", ""),
-            운동도구=exercise.get("운동도구", ""),
-            신체부위=exercise.get("신체부위", ""),
-            혼자여부=exercise.get("혼자여부", ""),
-            url=exercise.get("url", ""),
-            info=f"체력항목: {exercise.get('체력항목', '')} | 도구: {exercise.get('운동도구', '')} | 부위: {exercise.get('신체부위', '')}",
-        )
-        
-        return NotificationResponse(
-            has_notification=True,
-            message=message,
-            exercise=exercise_response,
-            weather_info={"status": "dangerous", "text": weather_text},
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"알림 생성 중 오류 발생: {str(e)}")
+        if exercises:
+            user_id = f"user_{user_location['lat']}_{user_location['lon']}"
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+            llm_context = {
+                "weather_summary": "위험",
+                "temperature_c": weather_info.temp,
+                "precipitation_prob": weather_info.rain_prob,
+                "time_of_day": "day" if weather_info.is_daytime else "night",
+            }
+
+            llm_result = choose_exercises_with_llm_for_today(
+                exercises=exercises,
+                user_profile=user_profile,
+                context=llm_context,
+                user_id=user_id,
+                top_k=8,
+                top_n=3,
+            )
+
+            for ex in llm_result.get("ranked", []):
+                exercise_videos.append(
+                    ExerciseVideoResponse(
+                        name=ex.get("Name", ""),
+                        체력항목=ex.get("체력항목", ""),
+                        운동도구=ex.get("운동도구", ""),
+                        신체부위=ex.get("신체부위", ""),
+                        혼자여부=ex.get("혼자여부", ""),
+                        url=ex.get("url", ""),
+                        info=f"체력항목: {ex.get('체력항목')} | 도구: {ex.get('운동도구')} | 부위: {ex.get('신체부위')}",
+                        reason=ex.get("why"),
+                        cautions=ex.get("cautions"),
+                        next_step=ex.get("next_step"),
+                    )
+                )
+
+    return RecommendResponse(
+        recommendations=facilities,
+        weather_info=weather_info,
+        exercise_videos=exercise_videos,
+    )
 
