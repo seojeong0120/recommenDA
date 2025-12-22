@@ -142,7 +142,6 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 백엔드 SignUpRequest 스펙에 정확히 맞춘 body
       final Map<String, dynamic> requestBody = {
         "phone": widget.userId,                 // 아이디 → phone
         "password": widget.password,
@@ -178,6 +177,23 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
 
         final userData = data["user"];
 
+        final Map<String, dynamic> userProfileForHome = {
+          "name": widget.name,
+          "age_group": _calculateAgeGroup(widget.birthdate),
+          "health_issues": widget.healthIssues,
+          "goals": widget.goals,
+          "preference_env": _mapPreferenceToApi(widget.preference),
+
+          // 선택
+          "phone": widget.userId,
+          "gender": widget.gender,
+          "birth_date": widget.birthdate,
+          "guardian_phone": widget.guardianPhone,
+          "address_road": _addressRoad ?? _address,
+          "latitude": _lat ?? 37.5665,
+          "longitude": _lon ?? 126.9780,
+        };
+
         if (!mounted) return;
 
         showDialog(
@@ -190,11 +206,12 @@ class _UserLocationScreenState extends State<UserLocationScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
+                  print("userProfileForHome = $userProfileForHome");
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
                       builder: (context) => HomeScreen(
-                        userProfile: userData,
+                        userProfile: userProfileForHome,
                         currentLat: _lat ?? 37.5665,
                         currentLon: _lon ?? 126.9780,
                       ),

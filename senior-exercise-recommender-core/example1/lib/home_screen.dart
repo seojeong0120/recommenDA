@@ -40,6 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    print("HomeScreen userProfile = ${widget.userProfile}");
+    print("HomeScreen name key = ${widget.userProfile['name']}");
     _fetchRecommendation();
   }
 
@@ -84,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (homeVideos != null && homeVideos.isNotEmpty) {
             _homeExerciseData = homeVideos[0];
           } else {
-            throw Exception("서버 오류: ${response.statusCode}");
+            _homeExerciseData = null;
           }
 
           // 3. 시설 추천 데이터
@@ -154,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  "${widget.userProfile['nickname']}님 안녕하세요!\n오늘도 건강한 하루 되세요.",
+                  "${widget.userProfile['name'] ?? '회원'}님 안녕하세요!\n오늘도 건강한 하루 되세요.",
                   style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, height: 1.4),
                 ),
                 const SizedBox(height: 30),
