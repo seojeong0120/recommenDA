@@ -3,11 +3,7 @@ import math
 from typing import Any
 
 def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """
-    지구 표면에서 두 좌표 사이의 대략적인 거리(km)를 계산.
-    """
-    R = 6371.0  # 지구 반경(km)
-
+    R = 6371.0
     d_lat = math.radians(lat2 - lat1)
     d_lon = math.radians(lon2 - lon1)
     r_lat1 = math.radians(lat1)
@@ -15,14 +11,9 @@ def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) ->
 
     a = math.sin(d_lat / 2) ** 2 + math.cos(r_lat1) * math.cos(r_lat2) * math.sin(d_lon / 2) ** 2
     c = 2 * math.asin(math.sqrt(a))
-
     return R * c
 
 def linear_score(x: float, x_min: float, x_max: float, reverse: bool = False) -> float:
-    """
-    x를 [x_min, x_max] 구간에서 0~1 사이로 선형 스케일링.
-    reverse=True면 큰 값일수록 점수가 작게.
-    """
     if x_min == x_max:
         return 0.0
     v = (x - x_min) / (x_max - x_min)
@@ -31,13 +22,7 @@ def linear_score(x: float, x_min: float, x_max: float, reverse: bool = False) ->
 
 def is_weather_dangerous(weather: Any) -> bool:
     """
-    날씨 정보(dict 또는 WeatherInfo 객체)를 받아
-    '실외 활동이 위험한지' 여부를 판단.
-
-    기준 (보수적, 시니어 기준):
-    - 강수확률 >= 60%
-    - 미세먼지(PM10) >= 81 (나쁨 이상)
-    - 기온 <= -5℃ 또는 >= 33℃
+    실외 활동이 위험한 날씨인지 판단 (시니어 기준)
     """
 
     def _get(obj: Any, key: str, default=None):
@@ -50,20 +35,44 @@ def is_weather_dangerous(weather: Any) -> bool:
     rain_prob = _get(weather, "rain_prob")
     pm10 = _get(weather, "pm10")
     temp = _get(weather, "temp")
+    precip_type = _get(weather, "precip_type", 0)
 
-    # 값이 전부 없으면 위험 아님으로 처리
+    # ✅ 1) 현재 비/눈/소나기면 즉시 위험
+    try:
+        if int(precip_type) != 0:
+            return True
+    except (ValueError, TypeError):
+        pass
+
+    # 값 전부 없으면 안전
     if rain_prob is None and pm10 is None and temp is None:
         return False
 
-    if rain_prob is not None and float(rain_prob) >= 60:
-        return True
+    # ✅ 2) 강수확률 (0~1 / 0~100 자동 처리)
+    if rain_prob is not None:
+        try:
+            rp = float(rain_prob)
+            rp_pct = rp * 100.0 if rp <= 1.0 else rp
+            if rp_pct >= 60.0:
+                return True
+        except (ValueError, TypeError):
+            pass
 
-    if pm10 is not None and float(pm10) >= 81:
-        return True
+    # 3) 미세먼지
+    if pm10 is not None:
+        try:
+            if float(pm10) >= 81.0:
+                return True
+        except (ValueError, TypeError):
+            pass
 
+    # 4) 기온
     if temp is not None:
-        t = float(temp)
-        if t <= -5 or t >= 33:
-            return True
+        try:
+            t = float(temp)
+            if t <= -5.0 or t >= 33.0:
+                return True
+        except (ValueError, TypeError):
+            pass
 
     return False

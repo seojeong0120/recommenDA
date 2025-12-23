@@ -15,9 +15,10 @@ class Location(TypedDict):
 
 class WeatherInfo(TypedDict):
     temp: float
-    rain_prob: float
+    rain_prob: float          # 0.0 ~ 1.0 (확률)
     pm10: float
     is_daytime: bool
+    precip_type: int          # 0=없음, 1=비, 2=비/눈, 3=눈, 4=소나기
 
 class Recommendation(TypedDict):
     fac_id: str

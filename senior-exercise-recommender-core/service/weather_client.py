@@ -217,52 +217,50 @@ def _fetch_openweather_air_quality(lat: float, lon: float) -> Optional[Dict[str,
 
 
 def fetch_weather(lat: float, lon: float) -> WeatherInfo:
-    """
-    위도/경도를 받아서 WeatherInfo 타입의 날씨 정보를 반환
-    
-    우선순위:
-    1. 기상청 초단기실황 (기온, 강수형태)
-    2. 기상청 단기예보 (강수 확률)
-    3. OpenWeather 대기질 API (미세먼지)
-    """
     current_hour = dt.datetime.now().hour
     is_daytime = 6 <= current_hour < 20
-    
+
     # 기본값
     temp = 20.0
     rain_prob = 0.0
     pm10 = 50.0
-    
-    # 1. 기상청 초단기실황 조회 (기온, 강수형태)
+    precip_type = 0   # ✅ 추가: 강수형태 기본값
+
+    # 1. 기상청 초단기실황 (기온, 강수형태)
     kma_nowcast = fetch_kma_ultra_nowcast(lat, lon)
     if kma_nowcast:
-        temp = kma_nowcast.get("T1H", temp)  # 현재 기온
-        
-        # 강수형태(PTY)를 바탕으로 강수 확률 추정
-        pty = int(kma_nowcast.get("PTY", 0))
-        if pty != 0:  # 비/눈이 오고 있으면
+        temp = kma_nowcast.get("T1H", temp)
+
+        # ✅ PTY 저장
+        try:
+            precip_type = int(kma_nowcast.get("PTY", 0))
+        except (ValueError, TypeError):
+            precip_type = 0
+
+        # 강수 중이면 강수 확률 높게 설정
+        if precip_type != 0:
             rain_prob = 0.8
         else:
-            # 1시간 강수량(RN1) 확인
             rn1 = kma_nowcast.get("RN1", 0.0)
             if rn1 > 0:
                 rain_prob = 0.7
-    
-    # 2. 기상청 단기예보에서 강수 확률 확인 (더 정확함)
+
+    # 2. 단기예보 POP (0~1)
     kma_forecast = _fetch_kma_forecast(lat, lon)
     if kma_forecast and "POP" in kma_forecast:
         rain_prob = max(rain_prob, kma_forecast["POP"])
-    
-    # 3. OpenWeather 대기질 API 조회
+
+    # 3. 대기질
     air_quality = _fetch_openweather_air_quality(lat, lon)
     if air_quality:
         pm10 = air_quality.get("pm10", pm10)
-    
+
     return {
         "temp": temp,
         "rain_prob": rain_prob,
         "pm10": pm10,
         "is_daytime": is_daytime,
+        "precip_type": precip_type,   # ✅ 핵심
     }
 
 

@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _exerciseName = "분석 중...";
   String _placeName = "위치 확인 중...";
   String _weatherText = "정보 로딩 중...";
+  bool _isRain = false;
   String _reason = "";
   
   double _targetLat = 37.5665;
@@ -79,8 +80,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           // 1. 날씨 정보
-          String rain = (weather['rain_prob'] > 30) ? "비" : "맑음";
-          _weatherText = "기온 ${weather['temp']}°C, $rain";
+          final double rainProbRaw = (weather['rain_prob'] as num?)?.toDouble() ?? 0.0;
+
+          // 백엔드는 0~1 확률값(예: 0.8)이므로 %로 변환해서 비교
+          final double rainProbPct = (rainProbRaw <= 1.0) ? rainProbRaw * 100.0 : rainProbRaw;
+
+          final bool isRain = rainProbPct >= 60.0; // 기준(60%)은 원하면 50/70으로 조절 가능
+          _isRain = isRain;
+          _weatherText = "기온 ${weather['temp']}°C, ${isRain ? "비" : "맑음"} (강수 ${rainProbPct.toStringAsFixed(0)}%)";
+
 
           // 2. 실내 운동 데이터 (LLM 데이터 포함)
           if (homeVideos != null && homeVideos.isNotEmpty) {
@@ -166,7 +174,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
                   child: Row(children: [
-                    const Icon(Icons.wb_sunny_rounded, size: 48, color: Colors.orange),
+                    Icon(
+                      _isRain ? Icons.umbrella_rounded : Icons.wb_sunny_rounded,
+                      size: 48,
+                      color: _isRain ? Colors.blueGrey : Colors.orange,
+                    ),
                     const SizedBox(width: 20),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       const Text("오늘의 날씨", style: TextStyle(color: Colors.grey)),
