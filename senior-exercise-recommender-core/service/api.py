@@ -15,7 +15,7 @@ from recommender.pipeline import recommend as recommend_facilities
 
 # 🔹 날씨 (추가)
 from service.weather_client import fetch_weather
-from recommender.types import WeatherInfo
+from recommender.types import WeatherInfo as WeatherInfoPayload
 
 # 🔹 LLM 홈트 추천
 from recommender.exercise_recommender import (
@@ -47,15 +47,6 @@ def normalize_phone(phone: str) -> str:
     if digits.startswith("82"):
         digits = "0" + digits[2:]
     return digits
-
-
-def is_weather_dangerous(weather_info: Dict[str, Any]) -> bool:
-    """간단한 위험 판단 (필요 시 고도화 가능)"""
-    if weather_info.get("rain_prob", 0) >= 70:
-        return True
-    if weather_info.get("pm10", 0) >= 80:
-        return True
-    return False
 
 
 # =========================================================
@@ -93,7 +84,7 @@ class RecommendRequest(BaseModel):
     user_location: Dict[str, float]
 
 
-class WeatherInfo(BaseModel):
+class WeatherInfoResponse(BaseModel):
     temp: Optional[float]
     rain_prob: Optional[float]
     pm10: Optional[float]
@@ -115,7 +106,7 @@ class ExerciseVideoResponse(BaseModel):
 
 class RecommendResponse(BaseModel):
     recommendations: List[Dict[str, Any]]
-    weather_info: WeatherInfo
+    weather_info: WeatherInfoResponse
     exercise_videos: List[ExerciseVideoResponse]
 
 
@@ -178,26 +169,45 @@ def recommend(req: RecommendRequest):
     user_location = req.user_location
 
     # ✅ 1️⃣ 날씨 먼저 조회 (핵심!)
-    weather_info: WeatherInfo = fetch_weather(
+    weather_raw: WeatherInfoPayload = fetch_weather(
         lat=user_location["lat"],
         lon=user_location["lon"],
     )
+    weather_info = WeatherInfoResponse(**weather_raw)
 
     # ✅ 2️⃣ 시설 추천 (weather_info 반드시 전달)
     facilities = recommend_facilities(
         user_profile=user_profile,
         user_location=user_location,
-        weather_info=weather_info,
+        weather_info=weather_raw,
         top_k=5,
     )
 
     exercise_videos: list[ExerciseVideoResponse] = []
 
     # ✅ 3️⃣ 날씨 위험하면 → LLM 홈트 추천
-    if is_weather_dangerous(weather_info):
+    if is_weather_dangerous(weather_raw):
         exercises = load_exercises()
-        if exercises:
-            user_id = f"user_{user_location['lat']}_{user_location['lon']}"
+
+        if not exercises:
+            exercise_videos.append(
+                ExerciseVideoResponse(
+                    name="",
+                    체력항목="",
+                    운동도구="",
+                    신체부위="",
+                    혼자여부="",
+                    url="",
+                    info="운동 데이터가 없습니다.",
+                )
+            )
+        else:
+            user_id = (
+                str(user_profile.get("user_id"))
+                or str(user_profile.get("id"))
+                or str(user_profile.get("phone"))
+                or f"user_{user_location['lat']}_{user_location['lon']}"
+            )
 
             llm_context = {
                 "weather_summary": "위험",
@@ -206,30 +216,48 @@ def recommend(req: RecommendRequest):
                 "time_of_day": "day" if weather_info.is_daytime else "night",
             }
 
-            llm_result = choose_exercises_with_llm_for_today(
-                exercises=exercises,
-                user_profile=user_profile,
-                context=llm_context,
-                user_id=user_id,
-                top_k=8,
-                top_n=3,
-            )
+            llm_result = None
+            try:
+                llm_result = choose_exercises_with_llm_for_today(
+                    exercises=exercises,
+                    user_profile=user_profile,
+                    context=llm_context,
+                    user_id=user_id,
+                    top_k=8,
+                    top_n=3,
+                )
+            except Exception as e:
+                # LLM 추천 실패 시 사용자에게 알려주기 위한 fallback
+                llm_result = None
 
-            for ex in llm_result.get("ranked", []):
+            if llm_result and llm_result.get("ranked"):
+                for ex in llm_result.get("ranked", []):
+                    exercise_videos.append(
+                        ExerciseVideoResponse(
+                            name=ex.get("Name", ""),
+                            체력항목=ex.get("체력항목", ""),
+                            운동도구=ex.get("운동도구", ""),
+                            신체부위=ex.get("신체부위", ""),
+                            혼자여부=ex.get("혼자여부", ""),
+                            url=ex.get("url", ""),
+                            info=f"체력항목: {ex.get('체력항목')} | "
+                                 f"도구: {ex.get('운동도구')} | "
+                                 f"부위: {ex.get('신체부위')}",
+                            reason=ex.get("why"),
+                            cautions=ex.get("cautions"),
+                            next_step=ex.get("next_step"),
+                        )
+                    )
+            else:
                 exercise_videos.append(
                     ExerciseVideoResponse(
-                        name=ex.get("Name", ""),
-                        체력항목=ex.get("체력항목", ""),
-                        운동도구=ex.get("운동도구", ""),
-                        신체부위=ex.get("신체부위", ""),
-                        혼자여부=ex.get("혼자여부", ""),
-                        url=ex.get("url", ""),
-                        info=f"체력항목: {ex.get('체력항목')} | "
-                             f"도구: {ex.get('운동도구')} | "
-                             f"부위: {ex.get('신체부위')}",
-                        reason=ex.get("why"),
-                        cautions=ex.get("cautions"),
-                        next_step=ex.get("next_step"),
+                        name="",
+                        체력항목="",
+                        운동도구="",
+                        신체부위="",
+                        혼자여부="",
+                        url="",
+                        info="LLM 운동 추천을 가져오지 못했습니다.",
                     )
                 )
 
